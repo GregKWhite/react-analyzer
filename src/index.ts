@@ -1,17 +1,7 @@
 import fs from "fs";
 import glob from "glob";
-import { AST, parse } from "@typescript-eslint/typescript-estree";
-import {
-  ImportDeclaration,
-  ImportDefaultSpecifier,
-  ImportNamespaceSpecifier,
-  ImportSpecifier,
-  Literal,
-  Position,
-} from "estree";
-import { JSXAttribute, JSXOpeningElement } from "estree-jsx";
-import escodegen from "escodegen";
-import { BaseNode, walk } from "estree-walker";
+import { Report } from "./types";
+import { parseFile } from "./file-parser";
 
 type StringOrRegexp = string | RegExp;
 type Excludes = StringOrRegexp[] | ((path: string) => boolean);
@@ -74,171 +64,6 @@ function filterFiles(files: string[], exclude: Excludes): string[] {
   return files.filter((path) => !excludeFn(path));
 }
 
-const PARSE_OPTIONS = { jsx: true, loc: true };
-function parseFile(path: string): AST<typeof PARSE_OPTIONS> {
-  const contents = fs.readFileSync(path).toString();
-
-  return parse(contents, PARSE_OPTIONS);
-}
-
-interface ImportInfo {
-  importName: string;
-  module: string;
-  isDefaultImport: boolean;
-  namespacedIdentifier: string;
-}
-function getImportInfo(node: ImportDeclaration): ImportInfo[] {
-  return node.specifiers.map((specifier) => {
-    const importName = getImportNameFromSpecifier(specifier);
-    const module = node.source.value;
-
-    return {
-      importName,
-      module,
-      isDefaultImport: specifier.type === "ImportDefaultSpecifier",
-      namespacedIdentifier: `${module}/${importName}`,
-    } as ImportInfo;
-  });
-}
-
-function getImportNameFromSpecifier(
-  specifier: ImportSpecifier | ImportDefaultSpecifier | ImportNamespaceSpecifier
-): string {
-  const importIdentifier =
-    "imported" in specifier
-      ? specifier.imported || specifier.local
-      : specifier.local;
-
-  return importIdentifier.name;
-}
-
-interface Report {
-  [key: string]: {
-    instances: ComponentInstance[];
-  };
-}
-
-function walkAst(ast: AST<typeof PARSE_OPTIONS> | BaseNode, callbacks: any) {
-  return walk(ast, {
-    enter(node) {
-      callbacks[node.type]?.(node, this);
-    },
-  });
-}
-
-interface Walker {
-  replace: (node: BaseNode) => void;
-  remove: (node: BaseNode) => void;
-}
-
-function walkTree(
-  report: Report,
-  filePath: string,
-  ast: AST<typeof PARSE_OPTIONS>
-): void {
-  walkAst(ast, {
-    ImportDeclaration(node: ImportDeclaration) {
-      getImportInfo(node).forEach((importInfo) => {
-        if (report[importInfo.importName] == null) {
-          report[importInfo.importName] = { instances: [] };
-        }
-      });
-    },
-
-    JSXOpeningElement(node: JSXOpeningElement) {
-      const componentInfo = analyzeComponent(filePath, node);
-
-      if (report[componentInfo.name] == null) {
-        report[componentInfo.name] = { instances: [] };
-      }
-
-      report[componentInfo.name].instances.push(componentInfo);
-    },
-  });
-}
-
-interface ComponentInstance {
-  name: string;
-
-  location: {
-    file: string;
-    start?: Position;
-    end?: Position;
-  };
-
-  props: {
-    [key: string]: {
-      value: Literal["value"];
-      location: string;
-    };
-  };
-
-  spread: boolean;
-}
-
-function analyzeComponent(
-  filePath: string,
-  node: JSXOpeningElement
-): ComponentInstance {
-  const instance: ComponentInstance = {
-    name: getComponentName(node),
-    location: {
-      file: filePath,
-      start: node.loc?.start,
-      end: node.loc?.end,
-    },
-    props: {},
-    spread: false,
-  };
-
-  node.attributes.forEach((attribute) => {
-    const { loc: attributeLocation } = attribute;
-    if (attribute.type === "JSXAttribute") {
-      instance.props[attribute.name.name.toString()] = {
-        value: getPropValue(attribute),
-        location: `${filePath}:${attributeLocation?.start.line}:${attributeLocation?.start.column}`,
-      };
-    } else {
-      instance.spread = true;
-    }
-  });
-
-  return instance;
-}
-
-function getComponentName(node: JSXOpeningElement): string {
-  const { name: identifier } = node;
-  if ("name" in identifier) {
-    return identifier.name.toString();
-  } else if (identifier.type === "JSXMemberExpression") {
-    const identifierName =
-      identifier.object.type === "JSXIdentifier"
-        ? identifier.object.name
-        : identifier.object.property.name;
-
-    return [identifierName, identifier.property.name].join(".");
-  } else {
-    throw new Error(
-      `Unknown component name type ${JSON.stringify(identifier, null, 2)}`
-    );
-  }
-}
-
-type PropValue = Literal["value"];
-function getPropValue(attribute: JSXAttribute): PropValue {
-  const { value } = attribute;
-
-  if (value == null) {
-    return true;
-  } else if (value.type === "Literal") {
-    return value.value;
-  } else if (value.type === "JSXExpressionContainer") {
-    return escodegen.generate(value.expression) as string;
-  } else {
-    throw new Error(`Unknown value type "${value}"`);
-  }
-}
-
 interface RunParams {
   startDir?: string;
   outputDir?: string;
@@ -250,9 +75,7 @@ function run({ startDir, outputDir }: RunParams = {}): void {
   const paths = findFiles({ startDir: startDir || "./src" });
 
   paths.forEach((path) => {
-    const ast = parseFile(path);
-
-    walkTree(report, path, ast);
+    parseFile(path, report);
   });
 
   const endTime = process.hrtime.bigint();
