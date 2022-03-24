@@ -48,8 +48,9 @@ function updateProgress(current: number, total: number) {
 interface RunParams {
   tsConfigPath?: string;
   output?: string;
+  excludeEmpty?: boolean;
 }
-function run({ tsConfigPath, output }: RunParams = {}): void {
+function run({ tsConfigPath, output, excludeEmpty }: RunParams = {}): void {
   const startTime = process.hrtime.bigint();
 
   const report: Report = { usage: {}, imports: {} };
@@ -63,6 +64,14 @@ function run({ tsConfigPath, output }: RunParams = {}): void {
     updateProgress(i + 1, sourceFiles.length);
     parseFile(sourceFile.getFilePath(), report);
   });
+
+  if (excludeEmpty) {
+    for (const key of Object.keys(report.usage)) {
+      if (report.usage[key].instances.length === 0) {
+        delete report.usage[key];
+      }
+    }
+  }
 
   const endTime = process.hrtime.bigint();
 
