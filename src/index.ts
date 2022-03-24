@@ -2,38 +2,10 @@ import fs from "fs";
 import glob from "glob";
 import { Report } from "./types";
 import { parseFile } from "./file-parser";
+import { Project } from "ts-morph";
 
 type StringOrRegexp = string | RegExp;
 type Excludes = StringOrRegexp[] | ((path: string) => boolean);
-
-interface findFilesProps {
-  /** The directory to search within */
-  startDir?: string;
-
-  /**
-   * Either an array of strings/regexes, or a function that will
-   * determine which paths to exclude from the result set.
-   *
-   * If an array is passed, it will check each path for a regex match, or to to
-   * see if the path starts with the given string. If the path is matched,
-   * it will not be searched. Note: all paths are relative to the current path.
-   *
-   * If a function is passed, it will be given the path to the path, and
-   * should return `true` if the path should be included.
-   */
-  exclude?: Excludes;
-}
-function findFiles({ startDir, exclude }: findFilesProps): string[] {
-  startDir = startDir || ".";
-  if (!startDir.endsWith("/")) {
-    startDir = `${startDir}/`;
-  }
-
-  let files = glob.sync(`${startDir}**/*.{ts,tsx,js,jsx}`, {});
-  files = filterFiles(files, exclude || ["./node_modules"]);
-
-  return files;
-}
 
 /**
  * Takes in an array of file paths, and returns an array of file paths that are
@@ -64,18 +36,32 @@ function filterFiles(files: string[], exclude: Excludes): string[] {
   return files.filter((path) => !excludeFn(path));
 }
 
-interface RunParams {
-  startDir?: string;
-  outputDir?: string;
+function updateProgress(current: number, total: number) {
+  process.stdout.clearLine(0);
+  process.stdout.cursorTo(0);
+  process.stdout.write(`Parsing file ${current} of ${total}`);
+  if (current === total) {
+    process.stdout.write("\n");
+  }
 }
-function run({ startDir, outputDir }: RunParams = {}): void {
+
+interface RunParams {
+  tsConfigPath?: string;
+  output?: string;
+}
+function run({ tsConfigPath, output }: RunParams = {}): void {
   const startTime = process.hrtime.bigint();
 
-  const report: Report = {};
-  const paths = findFiles({ startDir: startDir || "./src" });
+  const report: Report = { usage: {}, imports: {} };
 
-  paths.forEach((path) => {
-    parseFile(path, report);
+  const project = new Project();
+  project.addSourceFilesFromTsConfig(tsConfigPath || "./tsconfig.json");
+  const sourceFiles = project.getSourceFiles();
+  const paths = sourceFiles.map((file) => file.getFilePath());
+
+  sourceFiles.forEach((sourceFile, i) => {
+    updateProgress(i + 1, sourceFiles.length);
+    parseFile(sourceFile.getFilePath(), report);
   });
 
   const endTime = process.hrtime.bigint();
@@ -87,12 +73,15 @@ function run({ startDir, outputDir }: RunParams = {}): void {
   );
 
   const reportContents = JSON.stringify(report, null, 2);
-  if (outputDir) {
-    fs.writeFileSync(outputDir, reportContents);
+  if (output) {
+    fs.writeFileSync(output, reportContents);
   } else {
     console.log(reportContents);
   }
 }
 
-run({ startDir: "./sample" });
-// run({ startDir: "../discord/discord_app/modules/", outputDir: "results.json" });
+run({ tsConfigPath: "./sample/tsconfig.json" });
+run({
+  tsConfigPath: "../discord/discord_app/tsconfig.json",
+  output: "./report.json",
+});

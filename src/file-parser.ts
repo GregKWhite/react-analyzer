@@ -30,8 +30,9 @@ function analyzeAst(filePath: string, ast: ParsedAST, report: Report): void {
   walkAst(ast, {
     ImportDeclaration(node) {
       getImportInfo(node).forEach((importInfo) => {
-        if (report[importInfo.importName] == null) {
-          report[importInfo.importName] = { instances: [] };
+        if (report.imports[importInfo.importName] == null) {
+          report.usage[importInfo.importName] = { instances: [] };
+          report.imports[importInfo.module] = importInfo.importName;
         }
       });
     },
@@ -39,11 +40,11 @@ function analyzeAst(filePath: string, ast: ParsedAST, report: Report): void {
     JSXOpeningElement(node) {
       const componentInfo = analyzeComponent(filePath, node);
 
-      if (report[componentInfo.name] == null) {
-        report[componentInfo.name] = { instances: [] };
+      if (report.usage[componentInfo.name] == null) {
+        report.usage[componentInfo.name] = { instances: [] };
       }
 
-      report[componentInfo.name].instances.push(componentInfo);
+      report.usage[componentInfo.name].instances.push(componentInfo);
     },
   });
 }

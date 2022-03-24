@@ -1,9 +1,13 @@
 import { Literal, Position } from "estree-jsx";
 
 export interface Report {
-  [key: string]: {
-    instances: ComponentInstance[];
+  usage: {
+    [key: string]: {
+      instances: ComponentInstance[];
+    };
   };
+
+  imports: Record<string, string>;
 }
 
 export interface ComponentInstance {
