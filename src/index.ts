@@ -1,8 +1,7 @@
 import fs from "fs";
-import glob from "glob";
 import { Report } from "./types";
 import { parseFile } from "./file-parser";
-import { ts, Project } from "ts-morph";
+import { Project } from "ts-morph";
 
 type StringOrRegexp = string | RegExp;
 type Excludes = StringOrRegexp[] | ((path: string) => boolean);
