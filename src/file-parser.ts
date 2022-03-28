@@ -1,4 +1,5 @@
 import fs from "fs";
+import * as path from "path";
 import { AST, parse } from "@typescript-eslint/typescript-estree";
 import {
   ImportDeclaration,
@@ -8,68 +9,122 @@ import {
   JSXAttribute,
   JSXOpeningElement,
   Literal,
-  Node,
-  Position,
 } from "estree-jsx";
-import { BaseNode, walk } from "estree-walker";
-import { Report } from "./types";
+import { ComponentInstance, Report } from "./types";
 import escodegen from "escodegen";
+import { ts, SourceFile } from "ts-morph";
+import astray from "astray";
 
 const PARSE_OPTIONS = { jsx: true, loc: true };
 
 type ParsedAST = AST<typeof PARSE_OPTIONS>;
 
-export function parseFile(filePath: string, report: Report): void {
+export function parseFile(sourceFile: SourceFile, report: Report): void {
+  const filePath = sourceFile.getFilePath();
   const contents = fs.readFileSync(filePath).toString();
   const ast = parse(contents, PARSE_OPTIONS);
 
-  analyzeAst(filePath, ast, report);
+  analyzeAst(sourceFile, filePath, ast, report);
 }
 
-function analyzeAst(filePath: string, ast: ParsedAST, report: Report): void {
-  walkAst(ast, {
-    ImportDeclaration(node) {
-      getImportInfo(node).forEach((importInfo) => {
-        if (report.imports[importInfo.importName] == null) {
-          report.usage[importInfo.importName] = { instances: [] };
-          report.imports[importInfo.module] = importInfo.importName;
-        }
-      });
-    },
+function analyzeAst(
+  sourceFile: SourceFile,
+  filePath: string,
+  ast: ParsedAST,
+  report: Report
+): void {
+  astray.walk(ast, {
+    // @ts-expect-error
+    JSXOpeningElement(node: JSXOpeningElement) {
+      const componentInfo = analyzeComponent(sourceFile, ast, node);
 
-    JSXOpeningElement(node) {
-      const componentInfo = analyzeComponent(filePath, node);
+      // Ignore built-in elements
+      if (componentInfo.name.toLowerCase() === componentInfo.name) return;
 
-      if (report.usage[componentInfo.name] == null) {
-        report.usage[componentInfo.name] = { instances: [] };
+      if (report.usage[componentInfo.importedFrom] == null) {
+        report.usage[componentInfo.importedFrom] = { instances: [] };
       }
 
-      report.usage[componentInfo.name].instances.push(componentInfo);
+      report.usage[componentInfo.importedFrom].instances.push(componentInfo);
     },
   });
 }
 
-interface Walker {
-  replace: (node: Node) => void;
-  remove: (node: Node) => void;
+function getComponentPath(
+  sourceFile: SourceFile,
+  baseNode: ParsedAST,
+  name: string
+): string {
+  return (
+    getImportPath(sourceFile, baseNode, name) ??
+    getLocalPath(sourceFile, name) ??
+    "Unknown"
+  );
 }
 
-type ASTCallbacks = Partial<{
-  [NodeType in Node["type"]]: (
-    node: Extract<Node, { type: NodeType }>,
-    walker: Walker
-  ) => void;
-}>;
+function getLocalPath(sourceFile: SourceFile, name: string): string {
+  return `${sourceFile.getFilePath()}/${name}`;
+}
 
-function walkAst(ast: ParsedAST, callbacks: ASTCallbacks): BaseNode {
-  return walk(ast, {
-    enter(node) {
-      if (node.type in callbacks) {
-        // @ts-expect-error
-        callbacks[node.type]?.(node as Node, this);
-      }
+function getImportPath(
+  sourceFile: SourceFile,
+  baseNode: ParsedAST,
+  name: string
+): string | undefined {
+  let declaration: ImportDeclaration | undefined;
+  let found = false;
+  astray.walk(baseNode, {
+    ImportDeclaration: {
+      enter(node) {
+        if (!found) declaration = node;
+      },
+      exit() {
+        if (!found) declaration = undefined;
+      },
+    },
+
+    Identifier(node) {
+      if (declaration && node.name === name.split(".")[0]) found = true;
     },
   });
+
+  const importPath = declaration?.source?.value?.toString();
+  const isDefaultImport = Boolean(
+    declaration?.specifiers?.some((specifier) => {
+      return (
+        specifier.type === "ImportDefaultSpecifier" &&
+        specifier.local.name === name
+      );
+    })
+  );
+
+  if (importPath) {
+    const result = ts.resolveModuleName(
+      importPath,
+      sourceFile.getFilePath(),
+      sourceFile.getProject().getCompilerOptions(),
+      sourceFile.getProject().getModuleResolutionHost()
+    );
+
+    const formattedName = isDefaultImport
+      ? name
+          .split(".")
+          .map((namePart, i) => (i === 0 ? "default" : namePart))
+          .join(".")
+      : name;
+
+    let formattedImportPath = result.resolvedModule?.resolvedFileName;
+    if (formattedImportPath?.includes("node_modules")) {
+      formattedImportPath = importPath;
+    } else if (formattedImportPath) {
+      // TODO: make this relative to the tsconfig path
+      formattedImportPath = formattedImportPath;
+    } else {
+      formattedImportPath = "Unknown";
+    }
+
+    return `${formattedImportPath}/${formattedName}`;
+  }
 }
 
 interface ImportInfo {
@@ -103,30 +158,16 @@ function getImportNameFromSpecifier(
   return importIdentifier.name;
 }
 
-interface ComponentInstance {
-  name: string;
-
-  location: {
-    file: string;
-    start?: Position;
-    end?: Position;
-  };
-
-  props: {
-    [key: string]: {
-      value: Literal["value"];
-      location: string;
-    };
-  };
-
-  spread: boolean;
-}
-
 function analyzeComponent(
-  filePath: string,
+  sourceFile: SourceFile,
+  baseNode: ParsedAST,
   node: JSXOpeningElement
 ): ComponentInstance {
+  const filePath = sourceFile.getFilePath();
+  const name = getComponentName(node);
+
   const instance: ComponentInstance = {
+    importedFrom: getComponentPath(sourceFile, baseNode, name),
     name: getComponentName(node),
     location: {
       file: filePath,

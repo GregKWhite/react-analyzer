@@ -2,7 +2,7 @@ import fs from "fs";
 import glob from "glob";
 import { Report } from "./types";
 import { parseFile } from "./file-parser";
-import { Project } from "ts-morph";
+import { ts, Project } from "ts-morph";
 
 type StringOrRegexp = string | RegExp;
 type Excludes = StringOrRegexp[] | ((path: string) => boolean);
@@ -39,30 +39,38 @@ function filterFiles(files: string[], exclude: Excludes): string[] {
 function updateProgress(current: number, total: number) {
   process.stdout.clearLine(0);
   process.stdout.cursorTo(0);
-  process.stdout.write(`Parsing file ${current} of ${total}`);
+
+  process.stdout.write(`Parsing files... ${current} of ${total}`);
+
   if (current === total) {
-    process.stdout.write("\n");
+    process.stdout.write("\nGenerating report...\n");
   }
 }
 
 interface RunParams {
-  tsConfigPath?: string;
+  tsConfigPath: string;
   output?: string;
   excludeEmpty?: boolean;
 }
-function run({ tsConfigPath, output, excludeEmpty }: RunParams = {}): void {
+function run({ tsConfigPath, output, excludeEmpty }: RunParams): void {
   const startTime = process.hrtime.bigint();
 
   const report: Report = { usage: {}, imports: {} };
 
-  const project = new Project();
-  project.addSourceFilesFromTsConfig(tsConfigPath || "./tsconfig.json");
-  const sourceFiles = project.getSourceFiles();
-  const paths = sourceFiles.map((file) => file.getFilePath());
+  console.log("Loading files from tsconfig...");
+  const project = new Project({
+    tsConfigFilePath: tsConfigPath,
+    skipFileDependencyResolution: true,
+  });
+
+  const sourceFiles = project
+    .getSourceFiles()
+    .filter((file) => file.getFilePath().endsWith(".tsx"));
+  console.log(`Finished loading ${sourceFiles.length} files`);
 
   sourceFiles.forEach((sourceFile, i) => {
     updateProgress(i + 1, sourceFiles.length);
-    parseFile(sourceFile.getFilePath(), report);
+    parseFile(sourceFile, report);
   });
 
   if (excludeEmpty) {
@@ -76,7 +84,7 @@ function run({ tsConfigPath, output, excludeEmpty }: RunParams = {}): void {
   const endTime = process.hrtime.bigint();
 
   console.log(
-    `Scanned ${paths.length} files in ${
+    `Scanned ${sourceFiles.length} files in ${
       (endTime - startTime) / BigInt(1e9)
     } seconds`
   );
@@ -89,8 +97,9 @@ function run({ tsConfigPath, output, excludeEmpty }: RunParams = {}): void {
   }
 }
 
-run({ tsConfigPath: "./sample/tsconfig.json" });
+// run({ tsConfigPath: "./sample/tsconfig.json" });
 run({
   tsConfigPath: "../discord/discord_app/tsconfig.json",
   output: "./report.json",
+  excludeEmpty: true,
 });

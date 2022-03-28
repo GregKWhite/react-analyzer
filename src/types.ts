@@ -12,6 +12,7 @@ export interface Report {
 
 export interface ComponentInstance {
   name: string;
+  importedFrom: string;
 
   location: {
     file: string;
