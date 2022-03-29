@@ -62,7 +62,7 @@ function run({ tsConfigPath, output, processor }: RunParams): void {
 
   sourceFiles.forEach((sourceFile, i) => {
     updateProgress(i + 1, sourceFiles.length);
-    parseFile(sourceFile, report);
+    parseFile(tsConfigPath, sourceFile, report);
   });
 
   const endTime = process.hrtime.bigint();

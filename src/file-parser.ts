@@ -19,24 +19,33 @@ const PARSE_OPTIONS = { jsx: true, loc: true };
 
 type ParsedAST = AST<typeof PARSE_OPTIONS>;
 
-export function parseFile(sourceFile: SourceFile, report: Report): void {
+export function parseFile(
+  tsConfigPath: string,
+  sourceFile: SourceFile,
+  report: Report
+): void {
   const filePath = sourceFile.getFilePath();
   const contents = fs.readFileSync(filePath).toString();
   const ast = parse(contents, PARSE_OPTIONS);
 
-  analyzeAst(sourceFile, filePath, ast, report);
+  analyzeAst(tsConfigPath, sourceFile, ast, report);
 }
 
 function analyzeAst(
+  tsConfigPath: string,
   sourceFile: SourceFile,
-  filePath: string,
   ast: ParsedAST,
   report: Report
 ): void {
   astray.walk(ast, {
     // @ts-expect-error
     JSXOpeningElement(node: JSXOpeningElement) {
-      const componentInfo = analyzeComponent(sourceFile, ast, node);
+      const componentInfo = analyzeComponent(
+        tsConfigPath,
+        sourceFile,
+        ast,
+        node
+      );
 
       // Ignore built-in elements
       if (componentInfo.name.toLowerCase() === componentInfo.name) return;
@@ -51,12 +60,13 @@ function analyzeAst(
 }
 
 function getComponentPath(
+  tsConfigPath: string,
   sourceFile: SourceFile,
   baseNode: ParsedAST,
   name: string
 ): string {
   return (
-    getImportPath(sourceFile, baseNode, name) ??
+    getImportPath(tsConfigPath, sourceFile, baseNode, name) ??
     getLocalPath(sourceFile, name) ??
     "Unknown"
   );
@@ -67,6 +77,7 @@ function getLocalPath(sourceFile: SourceFile, name: string): string {
 }
 
 function getImportPath(
+  tsConfigPath: string,
   sourceFile: SourceFile,
   baseNode: ParsedAST,
   name: string
@@ -117,8 +128,10 @@ function getImportPath(
     if (formattedImportPath?.includes("node_modules")) {
       formattedImportPath = importPath;
     } else if (formattedImportPath) {
-      // TODO: make this relative to the tsconfig path
-      formattedImportPath = formattedImportPath;
+      formattedImportPath = path.relative(
+        path.dirname(tsConfigPath),
+        formattedImportPath
+      );
     } else {
       formattedImportPath = "Unknown";
     }
@@ -159,6 +172,7 @@ function getImportNameFromSpecifier(
 }
 
 function analyzeComponent(
+  tsConfigPath: string,
   sourceFile: SourceFile,
   baseNode: ParsedAST,
   node: JSXOpeningElement
@@ -167,7 +181,7 @@ function analyzeComponent(
   const name = getComponentName(node);
 
   const instance: ComponentInstance = {
-    importedFrom: getComponentPath(sourceFile, baseNode, name),
+    importedFrom: getComponentPath(tsConfigPath, sourceFile, baseNode, name),
     name: getComponentName(node),
     location: {
       file: filePath,
