@@ -133,10 +133,7 @@ function getImportPath(
     if (formattedImportPath?.includes("node_modules")) {
       formattedImportPath = importPath;
     } else if (formattedImportPath) {
-      formattedImportPath = path.relative(
-        path.dirname(tsConfigPath),
-        formattedImportPath
-      );
+      formattedImportPath = relativePath(tsConfigPath, formattedImportPath);
     } else {
       formattedImportPath = "Unknown";
     }
@@ -145,35 +142,8 @@ function getImportPath(
   }
 }
 
-interface ImportInfo {
-  importName: string;
-  module: string;
-  isDefaultImport: boolean;
-  namespacedIdentifier: string;
-}
-function getImportInfo(node: ImportDeclaration): ImportInfo[] {
-  return node.specifiers.map((specifier) => {
-    const importName = getImportNameFromSpecifier(specifier);
-    const module = node.source.value;
-
-    return {
-      importName,
-      module,
-      isDefaultImport: specifier.type === "ImportDefaultSpecifier",
-      namespacedIdentifier: `${module}/${importName}`,
-    } as ImportInfo;
-  });
-}
-
-function getImportNameFromSpecifier(
-  specifier: ImportSpecifier | ImportDefaultSpecifier | ImportNamespaceSpecifier
-): string {
-  const importIdentifier =
-    "imported" in specifier
-      ? specifier.imported || specifier.local
-      : specifier.local;
-
-  return importIdentifier.name;
+function relativePath(tsConfigPath: string, filePath: string) {
+  return path.relative(path.dirname(tsConfigPath), filePath);
 }
 
 function analyzeComponent(
@@ -189,7 +159,7 @@ function analyzeComponent(
     importedFrom: getComponentPath(tsConfigPath, sourceFile, baseNode, name),
     name: getComponentName(node),
     location: {
-      file: filePath,
+      file: relativePath(tsConfigPath, filePath),
       start: node.loc?.start,
       end: node.loc?.end,
     },
@@ -202,7 +172,7 @@ function analyzeComponent(
     if (attribute.type === "JSXAttribute") {
       instance.props[attribute.name.name.toString()] = {
         value: getPropValue(attribute),
-        location: `${filePath}:${attributeLocation?.start.line}:${attributeLocation?.start.column}`,
+        location: `${instance.location.file}:${attributeLocation?.start.line}:${attributeLocation?.start.column}`,
       };
     } else {
       instance.spread = true;
