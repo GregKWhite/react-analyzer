@@ -48,7 +48,7 @@ function analyzeAst(
       );
 
       // Ignore built-in elements
-      if (componentInfo.name.toLowerCase() === componentInfo.name) return;
+      if (getBuiltinName(componentInfo.name)) return;
 
       if (report.usage[componentInfo.importedFrom] == null) {
         report.usage[componentInfo.importedFrom] = { instances: [] };
@@ -66,10 +66,15 @@ function getComponentPath(
   name: string
 ): string {
   return (
+    getBuiltinName(name) ??
     getImportPath(tsConfigPath, sourceFile, baseNode, name) ??
     getLocalPath(sourceFile, name) ??
     "Unknown"
   );
+}
+
+function getBuiltinName(name: string) {
+  if (name === name.toLowerCase() || name.startsWith("React.")) return name;
 }
 
 function getLocalPath(sourceFile: SourceFile, name: string): string {
