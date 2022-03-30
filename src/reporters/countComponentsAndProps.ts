@@ -20,6 +20,22 @@ export default function countComponentsAndProps(report: Report) {
 
         result[componentName].props[prop] += 1;
       });
+
+      if (instance.spread) {
+        if (!result[componentName].props["..."]) {
+          result[componentName].props["..."] = 0;
+        }
+
+        result[componentName].props["..."] += 1;
+      }
+
+      if (instance.hasChildren) {
+        if (!result[componentName].props.children) {
+          result[componentName].props.children = 0;
+        }
+
+        result[componentName].props.children += 1;
+      }
     });
   });
 

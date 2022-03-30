@@ -2,16 +2,35 @@ import fs from "fs";
 import { Report } from "./types";
 import { parseFile } from "./file-parser";
 import { Project } from "ts-morph";
-import commandLineArgs from "command-line-args";
+import commandLineArgs, { OptionDefinition } from "command-line-args";
+import { loadReporter } from "./reporters";
 
-import raw from "./processors/raw";
-import countComponents from "./processors/countComponents";
-import countComponentsAndProps from "./processors/countComponentsAndProps";
+const OPTION_DEFINITIONS = [
+  {
+    name: "tsConfigPath",
+    alias: "c",
+    type: String,
+    defaultOption: true,
+    defaultValue: "./tsconfig.json",
+  },
+  { name: "output", alias: "o", type: String },
+  { name: "reporter", alias: "r", type: String },
+] as const;
 
-const PROCESSORS = {
-  raw: raw,
-  count: countComponents,
-  "count-props": countComponentsAndProps,
+type Writeable<T> = { -readonly [P in keyof T]: T[P] };
+type Options = typeof OPTION_DEFINITIONS[number];
+type ExtractType<OptionName extends Options["name"]> = ReturnType<
+  Extract<Options, { name: OptionName }>["type"]
+>;
+type OptionType<OptionName extends Options["name"]> = Extract<
+  Options,
+  { name: OptionName }
+> extends { defaultValue: any }
+  ? ExtractType<OptionName>
+  : ExtractType<OptionName> | undefined;
+
+type OptionTypes = {
+  [OptionName in Options["name"]]: OptionType<OptionName>;
 };
 
 function updateProgress(current: number, total: number) {
@@ -25,25 +44,12 @@ function updateProgress(current: number, total: number) {
   }
 }
 
-interface RunParams {
-  tsConfigPath: string;
-  output?: string;
-  processor?: string;
-}
-function run({ tsConfigPath, output, processor }: RunParams): void {
-  let processorFn: (report: Report) => Record<string, any>;
-  if (processor) {
-    processorFn = PROCESSORS[processor as keyof typeof PROCESSORS];
-    if (!processorFn) {
-      throw new Error(
-        `Unknown processor: ${processor}. Supported values are ${Object.keys(
-          PROCESSORS
-        ).join(", ")}`
-      );
-    }
-  } else {
-    processorFn = raw;
-  }
+async function run({
+  tsConfigPath,
+  output,
+  reporter,
+}: OptionTypes): Promise<void> {
+  const processorFn = await loadReporter(reporter);
 
   const startTime = process.hrtime.bigint();
 
@@ -82,16 +88,8 @@ function run({ tsConfigPath, output, processor }: RunParams): void {
   }
 }
 
-const OPTION_DEFINITIONS = [
-  {
-    name: "tsConfigPath",
-    alias: "c",
-    type: String,
-    defaultOption: true,
-    defaultValue: "./tsconfig.json",
-  },
-  { name: "output", alias: "o", type: String },
-  { name: "processor", alias: "p", type: String },
-];
+const args = commandLineArgs(
+  OPTION_DEFINITIONS as Writeable<typeof OPTION_DEFINITIONS>
+);
 
-run(commandLineArgs(OPTION_DEFINITIONS) as RunParams);
+run(args as OptionTypes);
