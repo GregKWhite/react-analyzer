@@ -165,6 +165,7 @@ function analyzeComponent(
     },
     props: {},
     spread: false,
+    hasChildren: !node.selfClosing,
   };
 
   node.attributes.forEach((attribute) => {

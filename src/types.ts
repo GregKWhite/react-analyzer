@@ -13,6 +13,7 @@ export interface Report {
 export interface ComponentInstance {
   name: string;
   importedFrom: string;
+  hasChildren: boolean;
 
   location: {
     file: string;
