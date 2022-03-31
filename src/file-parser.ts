@@ -163,7 +163,7 @@ function getImportPath(
     }
 
     return {
-      name: formattedName,
+      name: name,
       path: `${formattedImportPath}/${formattedName}`,
       alias,
     };
