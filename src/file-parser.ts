@@ -3,9 +3,6 @@ import * as path from "path";
 import { AST, parse } from "@typescript-eslint/typescript-estree";
 import {
   ImportDeclaration,
-  ImportDefaultSpecifier,
-  ImportNamespaceSpecifier,
-  ImportSpecifier,
   JSXAttribute,
   JSXOpeningElement,
   Literal,
