@@ -1,4 +1,5 @@
 import { Report } from "../types";
+import { sortEntries } from "./helpers";
 
 export default function countComponentsAndProps(report: Report) {
   const result: Record<
@@ -39,7 +40,12 @@ export default function countComponentsAndProps(report: Report) {
     });
   });
 
-  return Object.fromEntries(
-    Object.entries(result).sort((a, b) => b[1].count - a[1].count)
-  );
+  Object.keys(result).forEach((componentName) => {
+    result[componentName].props = sortEntries(
+      result[componentName].props,
+      (a, b) => b[1] - a[1]
+    );
+  });
+
+  return sortEntries(result, (a, b) => b[1].count - a[1].count);
 }

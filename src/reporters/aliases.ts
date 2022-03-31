@@ -1,4 +1,5 @@
 import { Report } from "../types";
+import { booleanFilter, sortEntries } from "./helpers";
 
 export default function aliases(report: Report) {
   const result: Record<string, string[]> = {};
@@ -8,10 +9,10 @@ export default function aliases(report: Report) {
       new Set(
         report.usage[componentName].instances
           .map((instance) => instance.alias)
-          .filter(Boolean)
+          .filter(booleanFilter)
       )
-    ) as string[];
+    );
   });
 
-  return result;
+  return sortEntries(result);
 }

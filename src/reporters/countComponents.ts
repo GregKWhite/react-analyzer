@@ -1,4 +1,5 @@
 import { Report } from "../types";
+import { sortEntries } from "./helpers";
 
 export default function countComponents(report: Report) {
   const result: Record<string, number> = {};
@@ -7,5 +8,5 @@ export default function countComponents(report: Report) {
     result[componentName] = report.usage[componentName].instances.length;
   });
 
-  return Object.fromEntries(Object.entries(result).sort((a, b) => b[1] - a[1]));
+  return sortEntries(result, (a, b) => b[1] - a[1]);
 }
