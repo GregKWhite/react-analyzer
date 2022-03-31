@@ -1,6 +1,7 @@
 import raw from "./raw";
 import countComponents from "./countComponents";
 import countComponentsAndProps from "./countComponentsAndProps";
+import aliases from "./aliases";
 import path from "path";
 import { Report } from "../types";
 
@@ -8,6 +9,7 @@ const REPORTERS = {
   raw: raw,
   count: countComponents,
   "count-props": countComponentsAndProps,
+  aliases: aliases,
 };
 
 export async function loadReporter(processorName: string | undefined) {

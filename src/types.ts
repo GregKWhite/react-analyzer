@@ -12,8 +12,10 @@ export interface Report {
 
 export interface ComponentInstance {
   name: string;
+  alias: string | undefined;
   importedFrom: string;
   hasChildren: boolean;
+  builtin: boolean;
 
   location: {
     file: string;

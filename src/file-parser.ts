@@ -48,7 +48,7 @@ function analyzeAst(
       );
 
       // Ignore built-in elements
-      if (getBuiltinName(componentInfo.name)) return;
+      if (componentInfo.builtin) return;
 
       if (report.usage[componentInfo.importedFrom] == null) {
         report.usage[componentInfo.importedFrom] = { instances: [] };
@@ -59,26 +59,35 @@ function analyzeAst(
   });
 }
 
-function getComponentPath(
+function lookupNode(
   tsConfigPath: string,
   sourceFile: SourceFile,
   baseNode: ParsedAST,
   name: string
-): string {
+): { name: string; path: string; alias: string | undefined } {
   return (
     getBuiltinName(name) ??
     getImportPath(tsConfigPath, sourceFile, baseNode, name) ??
-    getLocalPath(sourceFile, name) ??
-    "Unknown"
+    getLocalPath(sourceFile, name) ?? { path: "Unknown", alias: undefined }
   );
 }
 
-function getBuiltinName(name: string) {
-  if (name === name.toLowerCase() || name.startsWith("React.")) return name;
+function isBuiltIn(name: string) {
+  return name === name.toLowerCase() || name.startsWith("React.");
 }
 
-function getLocalPath(sourceFile: SourceFile, name: string): string {
-  return `${sourceFile.getFilePath()}/${name}`;
+function getBuiltinName(name: string) {
+  if (isBuiltIn(name)) {
+    return { name, path: name, alias: undefined };
+  }
+}
+
+function getLocalPath(sourceFile: SourceFile, name: string) {
+  return {
+    name,
+    path: `${sourceFile.getFilePath()}/${name}`,
+    alias: undefined,
+  };
 }
 
 function getImportPath(
@@ -86,9 +95,11 @@ function getImportPath(
   sourceFile: SourceFile,
   baseNode: ParsedAST,
   name: string
-): string | undefined {
+) {
   let declaration: ImportDeclaration | undefined;
   let found = false;
+  let alias: string | undefined;
+
   astray.walk(baseNode, {
     ImportDeclaration: {
       enter(node) {
@@ -103,6 +114,22 @@ function getImportPath(
       if (declaration && node.name === name.split(".")[0]) found = true;
     },
   });
+
+  if (declaration) {
+    const specifier = declaration.specifiers.find((specifier) => {
+      return specifier.local.name === name;
+    });
+
+    if (specifier) {
+      const specifierName =
+        "imported" in specifier
+          ? specifier.imported.name
+          : specifier.local.name;
+
+      alias = name === specifierName ? undefined : name;
+      name = specifierName;
+    }
+  }
 
   const importPath = declaration?.source?.value?.toString();
   const isDefaultImport = Boolean(
@@ -138,7 +165,11 @@ function getImportPath(
       formattedImportPath = "Unknown";
     }
 
-    return `${formattedImportPath}/${formattedName}`;
+    return {
+      name: formattedName,
+      path: `${formattedImportPath}/${formattedName}`,
+      alias,
+    };
   }
 }
 
@@ -154,10 +185,12 @@ function analyzeComponent(
 ): ComponentInstance {
   const filePath = sourceFile.getFilePath();
   const name = getComponentName(node);
+  const importInfo = lookupNode(tsConfigPath, sourceFile, baseNode, name);
 
   const instance: ComponentInstance = {
-    importedFrom: getComponentPath(tsConfigPath, sourceFile, baseNode, name),
-    name: getComponentName(node),
+    alias: importInfo.alias,
+    importedFrom: importInfo.path,
+    name: importInfo.name,
     location: {
       file: relativePath(tsConfigPath, filePath),
       start: node.loc?.start,
@@ -166,6 +199,7 @@ function analyzeComponent(
     props: {},
     spread: false,
     hasChildren: !node.selfClosing,
+    builtin: isBuiltIn(name),
   };
 
   node.attributes.forEach((attribute) => {
