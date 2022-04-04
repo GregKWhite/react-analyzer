@@ -2,3 +2,6 @@ built
 node_modules
 output
 .vscode
+.mine
+.parcel-cache
+dist
