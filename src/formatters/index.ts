@@ -5,25 +5,25 @@ import aliases from "./aliases";
 import path from "path";
 import { Report } from "../types";
 
-const REPORTERS = {
+const FORMATTERS = {
   raw: raw,
   count: countComponents,
   "count-props": countComponentsAndProps,
   aliases: aliases,
 };
 
-export async function loadReporter(processorName: string | undefined) {
-  if (!processorName) {
+export async function loadFormatter(formatterName: string | undefined) {
+  if (!formatterName) {
     return raw;
-  } else if (processorName in REPORTERS) {
-    return REPORTERS[processorName as keyof typeof REPORTERS]!;
+  } else if (formatterName in FORMATTERS) {
+    return FORMATTERS[formatterName as keyof typeof FORMATTERS]!;
   } else {
     try {
-      const pathName = path.join(process.cwd(), processorName);
+      const pathName = path.join(process.cwd(), formatterName);
       const processorFile = await import(pathName);
       return processorFile.default as (report: Report) => Record<string, any>;
     } catch (e) {
-      throw new Error(`Could not load reporter ${processorName}`);
+      throw new Error(`Could not load reporter ${formatterName}`);
     }
   }
 }

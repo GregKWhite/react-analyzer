@@ -11,7 +11,7 @@ import {
   Report,
   UnresolvedComponentInstance,
 } from "./types";
-import { loadReporter } from "./reporters";
+import { loadFormatter } from "./formatters";
 
 const OPTION_DEFINITIONS = [
   {
@@ -22,7 +22,7 @@ const OPTION_DEFINITIONS = [
     defaultValue: "./tsconfig.json",
   },
   { name: "output", alias: "o", type: String },
-  { name: "reporter", alias: "r", type: String },
+  { name: "formatter", alias: "f", type: String },
   { name: "parallel", alias: "p", type: Number, defaultValue: 4 },
 ] as const;
 
@@ -57,10 +57,10 @@ function updateProgress(current: number, total: number) {
 async function run({
   tsConfigPath,
   output,
-  reporter,
+  formatter,
   parallel: workerCount,
 }: OptionTypes): Promise<void> {
-  const processorFn = await loadReporter(reporter);
+  const processorFn = await loadFormatter(formatter);
 
   const startTime = process.hrtime.bigint();
 
