@@ -47,7 +47,7 @@ function updateProgress(current: number, total: number) {
   process.stdout.clearLine(0);
   process.stdout.cursorTo(0);
 
-  process.stdout.write(`Parsing files... ${current} of ${total}`);
+  process.stdout.write(`Parsed ${current} files...`);
 
   if (current === total) {
     process.stdout.write("\nGenerating report...\n");
