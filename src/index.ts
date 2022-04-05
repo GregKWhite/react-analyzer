@@ -1,8 +1,15 @@
 import fs from "fs";
-import { Report } from "./types";
-import { parseFile } from "./file-parser";
-import { Project } from "ts-morph";
-import commandLineArgs, { OptionDefinition } from "command-line-args";
+import path from "path";
+import { fork, ChildProcess } from "child_process";
+import { ts, Project } from "ts-morph";
+import commandLineArgs from "command-line-args";
+
+import {
+  ComponentInstance,
+  PossiblyResolvedComponentInstance,
+  Report,
+  UnresolvedComponentInstance,
+} from "./types";
 import { loadReporter } from "./reporters";
 
 const OPTION_DEFINITIONS = [
@@ -15,9 +22,11 @@ const OPTION_DEFINITIONS = [
   },
   { name: "output", alias: "o", type: String },
   { name: "reporter", alias: "r", type: String },
+  { name: "parallel", alias: "p", type: Number, defaultValue: 4 },
 ] as const;
 
 type Writeable<T> = { -readonly [P in keyof T]: T[P] };
+
 type Options = typeof OPTION_DEFINITIONS[number];
 type ExtractType<OptionName extends Options["name"]> = ReturnType<
   Extract<Options, { name: OptionName }>["type"]
@@ -48,14 +57,13 @@ async function run({
   tsConfigPath,
   output,
   reporter,
+  parallel: workerCount,
 }: OptionTypes): Promise<void> {
   const processorFn = await loadReporter(reporter);
 
   const startTime = process.hrtime.bigint();
 
-  const report: Report = { usage: {}, imports: {} };
-
-  console.log("Loading files from tsconfig...");
+  console.log("Loading files from tsconfig...", path.resolve(tsConfigPath));
   const project = new Project({
     tsConfigFilePath: tsConfigPath,
     skipFileDependencyResolution: true,
@@ -66,10 +74,47 @@ async function run({
     .filter((file) => file.getFilePath().endsWith(".tsx"));
   console.log(`Finished loading ${sourceFiles.length} files`);
 
-  sourceFiles.forEach((sourceFile, i) => {
-    updateProgress(i + 1, sourceFiles.length);
-    parseFile(tsConfigPath, sourceFile, report);
+  const workers: ChildProcess[] = [];
+  for (let i = 0; i < Math.max(workerCount, 1); i++) {
+    workers.push(fork("./dist/worker"));
+  }
+
+  const chunkSize = Math.min(Math.ceil(sourceFiles.length / workerCount), 100);
+  const chunkCount = Math.ceil(sourceFiles.length / chunkSize);
+  let currentChunk = 0;
+
+  const next = () => {
+    if (currentChunk >= chunkCount) {
+      return [];
+    }
+
+    const nextChunk = sourceFiles
+      .slice(currentChunk * chunkSize, (currentChunk + 1) * chunkSize)
+      .map((sourceFile) => sourceFile.getFilePath().toString());
+
+    currentChunk++;
+
+    return nextChunk;
+  };
+
+  let results: PossiblyResolvedComponentInstance[] = [];
+  const pendingWorkers = workers.map((worker, i) => {
+    return new Promise<typeof worker>((resolve) => {
+      worker.send({ tsConfigPath, paths: next() });
+
+      worker.on("message", (data: PossiblyResolvedComponentInstance[]) => {
+        results = results.concat(data);
+        worker.send({ tsConfigPath, paths: next() });
+      });
+
+      worker.on("disconnect", () => {
+        resolve(worker);
+      });
+    });
   });
+
+  await Promise.all(pendingWorkers);
+  const report = createReport(results, tsConfigPath, project);
 
   const endTime = process.hrtime.bigint();
 
@@ -86,6 +131,62 @@ async function run({
   } else {
     console.log(reportContents);
   }
+}
+
+function createReport(
+  componentInstances: PossiblyResolvedComponentInstance[],
+  tsConfigPath: string,
+  project: Project
+): Report {
+  const report: Report = { usage: {}, imports: {} };
+
+  componentInstances.forEach((componentInstance) => {
+    const resolvedComponentInstance: ComponentInstance =
+      "importPath" in componentInstance
+        ? resolveComponentInstance(componentInstance, tsConfigPath, project)
+        : componentInstance;
+
+    if (!report.usage[resolvedComponentInstance.importedFrom]) {
+      report.usage[resolvedComponentInstance.importedFrom] = { instances: [] };
+    }
+
+    report.usage[resolvedComponentInstance.importedFrom].instances.push(
+      resolvedComponentInstance
+    );
+  });
+
+  return report;
+}
+
+function resolveComponentInstance(
+  instance: UnresolvedComponentInstance,
+  tsConfigPath: string,
+  project: Project
+): ComponentInstance {
+  const result = ts.resolveModuleName(
+    instance.importPath,
+    path.join(path.dirname(tsConfigPath), instance.location.file),
+    project.getCompilerOptions(),
+    project.getModuleResolutionHost()
+  );
+
+  let formattedImportPath = result.resolvedModule?.resolvedFileName;
+
+  if (formattedImportPath?.includes("node_modules")) {
+    formattedImportPath = instance.importPath;
+  } else if (formattedImportPath) {
+    formattedImportPath = path.relative(
+      path.dirname(tsConfigPath),
+      formattedImportPath
+    );
+  } else {
+    formattedImportPath = "Unknown";
+  }
+
+  return {
+    ...instance,
+    importedFrom: `${formattedImportPath}/${instance.name}`,
+  };
 }
 
 const args = commandLineArgs(

@@ -7,65 +7,54 @@ import {
   JSXOpeningElement,
   Literal,
 } from "estree-jsx";
-import { ComponentInstance, Report } from "./types";
+import { NodeLookupInfo, PossiblyResolvedComponentInstance } from "./types";
 import escodegen from "escodegen";
-import { ts, SourceFile } from "ts-morph";
-import astray from "astray";
+import { walk } from "astray";
 
 const PARSE_OPTIONS = { jsx: true, loc: true };
 
 type ParsedAST = AST<typeof PARSE_OPTIONS>;
 
-export function parseFile(
-  tsConfigPath: string,
-  sourceFile: SourceFile,
-  report: Report
-): void {
-  const filePath = sourceFile.getFilePath();
+export function parseFile(tsConfigPath: string, filePath: string) {
   const contents = fs.readFileSync(filePath).toString();
   const ast = parse(contents, PARSE_OPTIONS);
 
-  analyzeAst(tsConfigPath, sourceFile, ast, report);
+  return analyzeAst(tsConfigPath, filePath, ast);
 }
 
 function analyzeAst(
   tsConfigPath: string,
-  sourceFile: SourceFile,
-  ast: ParsedAST,
-  report: Report
-): void {
-  astray.walk(ast, {
+  filePath: string,
+  ast: ParsedAST
+): PossiblyResolvedComponentInstance[] {
+  let results: PossiblyResolvedComponentInstance[] = [];
+  walk(ast, {
     // @ts-expect-error
     JSXOpeningElement(node: JSXOpeningElement) {
-      const componentInfo = analyzeComponent(
-        tsConfigPath,
-        sourceFile,
-        ast,
-        node
-      );
+      const componentInfo = analyzeComponent(tsConfigPath, filePath, ast, node);
 
       // Ignore built-in elements
       if (componentInfo.builtin) return;
-
-      if (report.usage[componentInfo.importedFrom] == null) {
-        report.usage[componentInfo.importedFrom] = { instances: [] };
-      }
-
-      report.usage[componentInfo.importedFrom].instances.push(componentInfo);
+      results.push(componentInfo);
     },
   });
+
+  return results;
 }
 
 function lookupNode(
   tsConfigPath: string,
-  sourceFile: SourceFile,
+  filePath: string,
   baseNode: ParsedAST,
   name: string
-): { name: string; path: string; alias: string | undefined } {
+): NodeLookupInfo {
   return (
     getBuiltinName(name) ??
-    getImportPath(tsConfigPath, sourceFile, baseNode, name) ??
-    getLocalPath(sourceFile, name) ?? { path: "Unknown", alias: undefined }
+    getImportPath(baseNode, name) ??
+    getLocalPath(tsConfigPath, filePath, name) ?? {
+      path: "Unknown",
+      alias: undefined,
+    }
   );
 }
 
@@ -79,25 +68,20 @@ function getBuiltinName(name: string) {
   }
 }
 
-function getLocalPath(sourceFile: SourceFile, name: string) {
+function getLocalPath(tsConfigPath: string, filePath: string, name: string) {
   return {
     name,
-    path: `${sourceFile.getFilePath()}/${name}`,
+    path: `${relativePath(tsConfigPath, filePath)}/${name}`,
     alias: undefined,
   };
 }
 
-function getImportPath(
-  tsConfigPath: string,
-  sourceFile: SourceFile,
-  baseNode: ParsedAST,
-  name: string
-) {
+function getImportPath(baseNode: ParsedAST, name: string) {
   let declaration: ImportDeclaration | undefined;
   let found = false;
   let alias: string | undefined;
 
-  astray.walk(baseNode, {
+  walk(baseNode, {
     ImportDeclaration: {
       enter(node) {
         if (!found) declaration = node;
@@ -139,13 +123,6 @@ function getImportPath(
   );
 
   if (importPath) {
-    const result = ts.resolveModuleName(
-      importPath,
-      sourceFile.getFilePath(),
-      sourceFile.getProject().getCompilerOptions(),
-      sourceFile.getProject().getModuleResolutionHost()
-    );
-
     const formattedName = isDefaultImport
       ? name
           .split(".")
@@ -153,19 +130,10 @@ function getImportPath(
           .join(".")
       : name;
 
-    let formattedImportPath = result.resolvedModule?.resolvedFileName;
-    if (formattedImportPath?.includes("node_modules")) {
-      formattedImportPath = importPath;
-    } else if (formattedImportPath) {
-      formattedImportPath = relativePath(tsConfigPath, formattedImportPath);
-    } else {
-      formattedImportPath = "Unknown";
-    }
-
     return {
-      name: name,
-      path: `${formattedImportPath}/${formattedName}`,
+      name: formattedName,
       alias,
+      importPath,
     };
   }
 }
@@ -176,17 +144,15 @@ function relativePath(tsConfigPath: string, filePath: string) {
 
 function analyzeComponent(
   tsConfigPath: string,
-  sourceFile: SourceFile,
+  filePath: string,
   baseNode: ParsedAST,
   node: JSXOpeningElement
-): ComponentInstance {
-  const filePath = sourceFile.getFilePath();
+): PossiblyResolvedComponentInstance {
   const name = getComponentName(node);
-  const importInfo = lookupNode(tsConfigPath, sourceFile, baseNode, name);
+  const importInfo = lookupNode(tsConfigPath, filePath, baseNode, name);
 
-  const instance: ComponentInstance = {
+  const instance: PossiblyResolvedComponentInstance = {
     alias: importInfo.alias,
-    importedFrom: importInfo.path,
     name: importInfo.name,
     location: {
       file: relativePath(tsConfigPath, filePath),
@@ -197,6 +163,9 @@ function analyzeComponent(
     spread: false,
     hasChildren: !node.selfClosing,
     builtin: isBuiltIn(name),
+    ...("importPath" in importInfo
+      ? { importPath: importInfo.importPath }
+      : { importedFrom: importInfo.path }),
   };
 
   node.attributes.forEach((attribute) => {

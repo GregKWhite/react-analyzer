@@ -32,3 +32,20 @@ export interface ComponentInstance {
 
   spread: boolean;
 }
+
+export type UnresolvedComponentInstance = Omit<
+  ComponentInstance,
+  "importedFrom"
+> & { importPath: string };
+
+export type PossiblyResolvedComponentInstance =
+  | ComponentInstance
+  | UnresolvedComponentInstance;
+
+export type NodeLookupInfo =
+  | { name: string; path: string; alias: string | undefined }
+  | {
+      name: string;
+      alias: string | undefined;
+      importPath: string;
+    };
