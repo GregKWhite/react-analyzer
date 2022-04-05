@@ -112,7 +112,7 @@ function getImportPath(baseNode: ParsedAST, name: string) {
     }
   }
 
-  const importPath = declaration?.source?.value?.toString();
+  const importIdentifier = declaration?.source?.value?.toString();
   const isDefaultImport = Boolean(
     declaration?.specifiers?.some((specifier) => {
       return (
@@ -122,7 +122,7 @@ function getImportPath(baseNode: ParsedAST, name: string) {
     })
   );
 
-  if (importPath) {
+  if (importIdentifier) {
     const formattedName = isDefaultImport
       ? name
           .split(".")
@@ -133,7 +133,7 @@ function getImportPath(baseNode: ParsedAST, name: string) {
     return {
       name: formattedName,
       alias,
-      importPath,
+      importIdentifier,
     };
   }
 }
@@ -163,9 +163,9 @@ function analyzeComponent(
     spread: false,
     hasChildren: !node.selfClosing,
     builtin: isBuiltIn(name),
-    ...("importPath" in importInfo
-      ? { importPath: importInfo.importPath }
-      : { importedFrom: importInfo.path }),
+    ...("importIdentifier" in importInfo
+      ? { importIdentifier: importInfo.importIdentifier }
+      : { importPath: importInfo.path }),
   };
 
   node.attributes.forEach((attribute) => {

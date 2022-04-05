@@ -142,15 +142,15 @@ function createReport(
 
   componentInstances.forEach((componentInstance) => {
     const resolvedComponentInstance: ComponentInstance =
-      "importPath" in componentInstance
+      "importIdentifier" in componentInstance
         ? resolveComponentInstance(componentInstance, tsConfigPath, project)
         : componentInstance;
 
-    if (!report.usage[resolvedComponentInstance.importedFrom]) {
-      report.usage[resolvedComponentInstance.importedFrom] = { instances: [] };
+    if (!report.usage[resolvedComponentInstance.importPath]) {
+      report.usage[resolvedComponentInstance.importPath] = { instances: [] };
     }
 
-    report.usage[resolvedComponentInstance.importedFrom].instances.push(
+    report.usage[resolvedComponentInstance.importPath].instances.push(
       resolvedComponentInstance
     );
   });
@@ -164,7 +164,7 @@ function resolveComponentInstance(
   project: Project
 ): ComponentInstance {
   const result = ts.resolveModuleName(
-    instance.importPath,
+    instance.importIdentifier,
     path.join(path.dirname(tsConfigPath), instance.location.file),
     project.getCompilerOptions(),
     project.getModuleResolutionHost()
@@ -173,7 +173,7 @@ function resolveComponentInstance(
   let formattedImportPath = result.resolvedModule?.resolvedFileName;
 
   if (formattedImportPath?.includes("node_modules")) {
-    formattedImportPath = instance.importPath;
+    formattedImportPath = instance.importIdentifier;
   } else if (formattedImportPath) {
     formattedImportPath = path.relative(
       path.dirname(tsConfigPath),
@@ -185,7 +185,7 @@ function resolveComponentInstance(
 
   return {
     ...instance,
-    importedFrom: `${formattedImportPath}/${instance.name}`,
+    importPath: `${formattedImportPath}/${instance.name}`,
   };
 }
 

@@ -13,7 +13,7 @@ export interface Report {
 export interface ComponentInstance {
   name: string;
   alias: string | undefined;
-  importedFrom: string;
+  importPath: string;
   hasChildren: boolean;
   builtin: boolean;
 
@@ -35,8 +35,8 @@ export interface ComponentInstance {
 
 export type UnresolvedComponentInstance = Omit<
   ComponentInstance,
-  "importedFrom"
-> & { importPath: string };
+  "importPath"
+> & { importIdentifier: string };
 
 export type PossiblyResolvedComponentInstance =
   | ComponentInstance
@@ -47,5 +47,5 @@ export type NodeLookupInfo =
   | {
       name: string;
       alias: string | undefined;
-      importPath: string;
+      importIdentifier: string;
     };
