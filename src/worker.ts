@@ -1,5 +1,8 @@
 import { parseFile } from "./file-parser";
-import { PossiblyResolvedComponentInstance } from "./types";
+import {
+  ChildProcessMessage,
+  PossiblyResolvedComponentInstance,
+} from "./types";
 
 interface Params {
   tsConfigPath: string;
@@ -12,9 +15,12 @@ process.on("message", ({ tsConfigPath, paths }: Params) => {
     return;
   }
 
-  process.send?.(
-    paths.reduce((acc, path) => {
+  const message: ChildProcessMessage = {
+    filesParsed: paths,
+    instances: paths.reduce((acc, path) => {
       return acc.concat(parseFile(tsConfigPath, path));
-    }, [] as PossiblyResolvedComponentInstance[])
-  );
+    }, [] as PossiblyResolvedComponentInstance[]),
+  };
+
+  process.send?.(message);
 });

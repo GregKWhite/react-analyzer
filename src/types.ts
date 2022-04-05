@@ -49,3 +49,8 @@ export type NodeLookupInfo =
       alias: string | undefined;
       importIdentifier: string;
     };
+
+export type ChildProcessMessage = {
+  instances: PossiblyResolvedComponentInstance[];
+  filesParsed: string[];
+};

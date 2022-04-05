@@ -5,6 +5,7 @@ import { ts, Project } from "ts-morph";
 import commandLineArgs from "command-line-args";
 
 import {
+  ChildProcessMessage,
   ComponentInstance,
   PossiblyResolvedComponentInstance,
   Report,
@@ -79,7 +80,11 @@ async function run({
     workers.push(fork("./dist/worker"));
   }
 
-  const chunkSize = Math.min(Math.ceil(sourceFiles.length / workerCount), 100);
+  const fileStatuses = Object.fromEntries(
+    sourceFiles.map((file) => [file, false])
+  );
+
+  const chunkSize = Math.min(Math.ceil(sourceFiles.length / workerCount), 250);
   const chunkCount = Math.ceil(sourceFiles.length / chunkSize);
   let currentChunk = 0;
 
@@ -102,10 +107,22 @@ async function run({
     return new Promise<typeof worker>((resolve) => {
       worker.send({ tsConfigPath, paths: next() });
 
-      worker.on("message", (data: PossiblyResolvedComponentInstance[]) => {
-        results = results.concat(data);
-        worker.send({ tsConfigPath, paths: next() });
-      });
+      worker.on(
+        "message",
+        ({ instances, filesParsed }: ChildProcessMessage) => {
+          results = results.concat(instances);
+          filesParsed.forEach((file) => (fileStatuses[file] = true));
+
+          if (filesParsed.length > 0) {
+            updateProgress(
+              Object.values(fileStatuses).filter((status) => status).length,
+              sourceFiles.length
+            );
+          }
+
+          worker.send({ tsConfigPath, paths: next() });
+        }
+      );
 
       worker.on("disconnect", () => {
         resolve(worker);
