@@ -102,7 +102,7 @@ async function run({
     return nextChunk;
   };
 
-  let results: PossiblyResolvedComponentInstance[] = [];
+  const report: Report = { usage: {}, imports: {} };
   const pendingWorkers = workers.map((worker, i) => {
     return new Promise<typeof worker>((resolve) => {
       worker.send({ tsConfigPath, paths: next() });
@@ -110,8 +110,22 @@ async function run({
       worker.on(
         "message",
         ({ instances, filesParsed }: ChildProcessMessage) => {
-          results = results.concat(instances);
+          const resolvedInstances = instances.map((instance) => {
+            return "importPath" in instance
+              ? instance
+              : resolveComponentInstance(instance, tsConfigPath, project);
+          });
+
+          buildReport(resolvedInstances, report);
           filesParsed.forEach((file) => (fileStatuses[file] = true));
+
+          if (recursive) {
+            resolvedInstances.forEach((instance) => {
+              if (fileStatuses[instance.location.file] == null) {
+                fileStatuses[instance.location.file] = false;
+              }
+            });
+          }
 
           if (filesParsed.length > 0) {
             updateProgress(
@@ -131,8 +145,6 @@ async function run({
   });
 
   await Promise.all(pendingWorkers);
-  const report = createReport(results, tsConfigPath, project);
-
   const endTime = process.hrtime.bigint();
 
   console.log(
@@ -150,29 +162,16 @@ async function run({
   }
 }
 
-function createReport(
-  componentInstances: PossiblyResolvedComponentInstance[],
-  tsConfigPath: string,
-  project: Project
-): Report {
-  const report: Report = { usage: {}, imports: {} };
-
+function buildReport(componentInstances: ComponentInstance[], report: Report) {
   componentInstances.forEach((componentInstance) => {
-    const resolvedComponentInstance: ComponentInstance =
-      "importIdentifier" in componentInstance
-        ? resolveComponentInstance(componentInstance, tsConfigPath, project)
-        : componentInstance;
-
-    if (!report.usage[resolvedComponentInstance.importPath]) {
-      report.usage[resolvedComponentInstance.importPath] = { instances: [] };
+    if (!report.usage[componentInstance.importPath]) {
+      report.usage[componentInstance.importPath] = { instances: [] };
     }
 
-    report.usage[resolvedComponentInstance.importPath].instances.push(
-      resolvedComponentInstance
+    report.usage[componentInstance.importPath].instances.push(
+      componentInstance
     );
   });
-
-  return report;
 }
 
 function resolveComponentInstance(
