@@ -5,7 +5,7 @@ import {
   resolveComponentInstances,
   updateProgress,
 } from "./helpers";
-import { OptionTypes } from "./options";
+import { MainOptionTypes } from "./options";
 import { ChildProcessMessage, Report } from "./types";
 
 const MAX_CHUNK_SIZE = 250;
@@ -50,14 +50,14 @@ function loadFiles(project: Project, tsConfigPath: string): string[] {
 
 export async function crawlDirectory(
   project: Project,
-  { parallel: workerCount, entryPoint, tsConfigPath }: OptionTypes
+  { parallel: workerCount, tsConfigPath }: MainOptionTypes
 ): Promise<Report> {
   const report: Report = { usage: {}, imports: {} };
   const sourceFiles = loadFiles(project, tsConfigPath);
   let totalFilesParsed = 0;
 
   const workers: ChildProcess[] = [];
-  workerCount = entryPoint ? 1 : Math.max(workerCount, 1);
+  workerCount = Math.max(workerCount, 1);
 
   const next = getChunks(sourceFiles, workerCount);
 

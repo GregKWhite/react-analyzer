@@ -2,7 +2,12 @@ import fs from "fs";
 import { Project } from "ts-morph";
 import { Report } from "./types";
 import { loadFormatter } from "./formatters";
-import { OptionTypes, parseArguments } from "./options";
+import {
+  OptionTypes,
+  MainOptionTypes,
+  CrawlOptionTypes,
+  parseArguments,
+} from "./options";
 import { crawlDirectory } from "./crawl-directory";
 import { crawlFile } from "./crawl-file";
 

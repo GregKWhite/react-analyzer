@@ -2,12 +2,12 @@ import path from "path";
 import { Project } from "ts-morph";
 import { parseFile } from "./file-parser";
 import { buildReport, resolveComponentInstances } from "./helpers";
-import { OptionTypes } from "./options";
+import { CrawlOptionTypes } from "./options";
 import { PossiblyResolvedComponentInstance, Report } from "./types";
 
 export async function crawlFile(
   project: Project,
-  { tsConfigPath, entryPoint }: OptionTypes
+  { tsConfigPath, entryPoint }: CrawlOptionTypes
 ): Promise<Report> {
   const report = { usage: {}, imports: {} };
 
