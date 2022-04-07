@@ -22,6 +22,7 @@
     "react-analyzer": "dist/index.js"
   },
   "scripts": {
+    "tsc": "tsc",
     "build": "parcel build",
     "start": "node --es-module-specifier-resolution=node dist/index.js",
     "postinstall": "npm run build"
