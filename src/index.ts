@@ -24,6 +24,7 @@ const OPTION_DEFINITIONS = [
   { name: "output", alias: "o", type: String },
   { name: "formatter", alias: "f", type: String },
   { name: "parallel", alias: "p", type: Number, defaultValue: 4 },
+  { name: "entryPoint", alias: "e", type: String },
 ] as const;
 
 type Writeable<T> = { -readonly [P in keyof T]: T[P] };
@@ -59,6 +60,7 @@ async function run({
   output,
   formatter,
   parallel: workerCount,
+  entryPoint,
 }: OptionTypes): Promise<void> {
   const processorFn = await loadFormatter(formatter);
 
@@ -70,39 +72,54 @@ async function run({
     skipFileDependencyResolution: true,
   });
 
-  const sourceFiles = project
+  let sourceFiles = project
     .getSourceFiles()
     .filter((file) => file.getFilePath().endsWith(".tsx"));
-  console.log(`Finished loading ${sourceFiles.length} files`);
+
+  if (entryPoint) {
+    sourceFiles = sourceFiles.filter((file) =>
+      file.getFilePath().includes(entryPoint)
+    );
+  }
+
+  console.log(`Finished loading ${sourceFiles.length} file(s)`);
 
   const workers: ChildProcess[] = [];
-  for (let i = 0; i < Math.max(workerCount, 1); i++) {
+  workerCount = entryPoint ? 1 : Math.max(workerCount, 1);
+  for (let i = 0; i < workerCount; i++) {
     workers.push(fork("./dist/worker"));
   }
 
-  const fileStatuses = Object.fromEntries(
-    sourceFiles.map((file) => [file, false])
+  const fileStatuses = new Map(
+    sourceFiles.map((file) => [file.getFilePath().toString(), false])
   );
 
   const chunkSize = Math.min(Math.ceil(sourceFiles.length / workerCount), 250);
-  const chunkCount = Math.ceil(sourceFiles.length / chunkSize);
   let currentChunk = 0;
 
   const next = () => {
-    if (currentChunk >= chunkCount) {
-      return [];
+    const paths = Array.from(fileStatuses.keys());
+
+    if (entryPoint) {
+      return paths.filter((path) => fileStatuses.get(path) == false);
+    } else {
+      if (currentChunk * chunkSize >= paths.length) {
+        return [];
+      }
+
+      const nextChunk = paths.slice(
+        currentChunk * chunkSize,
+        (currentChunk + 1) * chunkSize
+      );
+
+      currentChunk++;
+
+      return nextChunk;
     }
-
-    const nextChunk = sourceFiles
-      .slice(currentChunk * chunkSize, (currentChunk + 1) * chunkSize)
-      .map((sourceFile) => sourceFile.getFilePath().toString());
-
-    currentChunk++;
-
-    return nextChunk;
   };
 
   const report: Report = { usage: {}, imports: {} };
+  let totalFilesParsed = 0;
   const pendingWorkers = workers.map((worker, i) => {
     return new Promise<typeof worker>((resolve) => {
       worker.send({ tsConfigPath, paths: next() });
@@ -110,6 +127,10 @@ async function run({
       worker.on(
         "message",
         ({ instances, filesParsed }: ChildProcessMessage) => {
+          if (filesParsed.length === 0) return;
+
+          totalFilesParsed += filesParsed.length;
+
           const resolvedInstances = instances.map((instance) => {
             return "importPath" in instance
               ? instance
@@ -117,22 +138,26 @@ async function run({
           });
 
           buildReport(resolvedInstances, report);
-          filesParsed.forEach((file) => (fileStatuses[file] = true));
+          filesParsed.forEach((file) => fileStatuses.set(file, true));
 
-          if (recursive) {
+          if (entryPoint) {
             resolvedInstances.forEach((instance) => {
-              if (fileStatuses[instance.location.file] == null) {
-                fileStatuses[instance.location.file] = false;
+              if (instance.external) return;
+
+              const fullPath = path.resolve(
+                path.join(path.dirname(tsConfigPath), instance.importPath)
+              );
+
+              if (!fileStatuses.has(fullPath)) {
+                fileStatuses.set(fullPath, false);
               }
             });
           }
 
-          if (filesParsed.length > 0) {
-            updateProgress(
-              Object.values(fileStatuses).filter((status) => status).length,
-              sourceFiles.length
-            );
-          }
+          updateProgress(
+            totalFilesParsed,
+            Array.from(fileStatuses.keys()).length
+          );
 
           worker.send({ tsConfigPath, paths: next() });
         }
@@ -148,7 +173,7 @@ async function run({
   const endTime = process.hrtime.bigint();
 
   console.log(
-    `Scanned ${sourceFiles.length} files in ${
+    `Scanned ${Array.from(fileStatuses.keys()).length} file(s) in ${
       (endTime - startTime) / BigInt(1e9)
     } seconds`
   );
@@ -164,13 +189,13 @@ async function run({
 
 function buildReport(componentInstances: ComponentInstance[], report: Report) {
   componentInstances.forEach((componentInstance) => {
-    if (!report.usage[componentInstance.importPath]) {
-      report.usage[componentInstance.importPath] = { instances: [] };
+    const key = `${componentInstance.importPath}/${componentInstance.name}`;
+
+    if (!report.usage[key]) {
+      report.usage[key] = { instances: [] };
     }
 
-    report.usage[componentInstance.importPath].instances.push(
-      componentInstance
-    );
+    report.usage[key].instances.push(componentInstance);
   });
 }
 
@@ -179,6 +204,8 @@ function resolveComponentInstance(
   tsConfigPath: string,
   project: Project
 ): ComponentInstance {
+  let external = false;
+
   const result = ts.resolveModuleName(
     instance.importIdentifier,
     path.join(path.dirname(tsConfigPath), instance.location.file),
@@ -189,6 +216,7 @@ function resolveComponentInstance(
   let formattedImportPath = result.resolvedModule?.resolvedFileName;
 
   if (formattedImportPath?.includes("node_modules")) {
+    external = true;
     formattedImportPath = instance.importIdentifier;
   } else if (formattedImportPath) {
     formattedImportPath = path.relative(
@@ -201,7 +229,8 @@ function resolveComponentInstance(
 
   return {
     ...instance,
-    importPath: `${formattedImportPath}/${instance.name}`,
+    importPath: formattedImportPath,
+    external,
   };
 }
 

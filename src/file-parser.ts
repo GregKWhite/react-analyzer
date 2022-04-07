@@ -71,7 +71,7 @@ function getBuiltinName(name: string) {
 function getLocalPath(tsConfigPath: string, filePath: string, name: string) {
   return {
     name,
-    path: `${relativePath(tsConfigPath, filePath)}/${name}`,
+    path: relativePath(tsConfigPath, filePath),
     alias: undefined,
   };
 }
@@ -107,7 +107,7 @@ function getImportPath(baseNode: ParsedAST, name: string) {
           ? specifier.imported.name
           : specifier.local.name;
 
-      alias = name === specifierName ? undefined : name;
+      alias = name;
       name = specifierName;
     }
   }
@@ -150,6 +150,7 @@ function analyzeComponent(
 ): PossiblyResolvedComponentInstance {
   const name = getComponentName(node);
   const importInfo = lookupNode(tsConfigPath, filePath, baseNode, name);
+  const isResolved = "importPath" in importInfo;
 
   const instance: PossiblyResolvedComponentInstance = {
     alias: importInfo.alias,
@@ -163,6 +164,7 @@ function analyzeComponent(
     spread: false,
     hasChildren: !node.selfClosing,
     builtin: isBuiltIn(name),
+    external: !isResolved,
     ...("importIdentifier" in importInfo
       ? { importIdentifier: importInfo.importIdentifier }
       : { importPath: importInfo.path }),

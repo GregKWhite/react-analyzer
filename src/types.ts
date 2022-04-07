@@ -16,6 +16,7 @@ export interface ComponentInstance {
   importPath: string;
   hasChildren: boolean;
   builtin: boolean;
+  external: boolean;
 
   location: {
     file: string;
