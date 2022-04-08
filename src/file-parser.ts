@@ -72,7 +72,7 @@ function getLocalPath(tsConfigPath: string, filePath: string, name: string) {
   return {
     name,
     path: relativePath(tsConfigPath, filePath),
-    alias: undefined,
+    alias: name,
   };
 }
 
@@ -80,6 +80,10 @@ function getImportPath(baseNode: ParsedAST, name: string) {
   let declaration: ImportDeclaration | undefined;
   let found = false;
   let alias: string | undefined;
+
+  // Handle components of the form Foo.Bar. We want to match against 'Foo', not
+  // 'Foo.Bar' later on when we try to find the component's import
+  const firstNamePart = name.split(".")[0];
 
   walk(baseNode, {
     ImportDeclaration: {
@@ -92,13 +96,13 @@ function getImportPath(baseNode: ParsedAST, name: string) {
     },
 
     Identifier(node) {
-      if (declaration && node.name === name.split(".")[0]) found = true;
+      if (declaration && node.name === firstNamePart) found = true;
     },
   });
 
   if (declaration) {
     const specifier = declaration.specifiers.find((specifier) => {
-      return specifier.local.name === name;
+      return specifier.local.name === firstNamePart;
     });
 
     if (specifier) {
@@ -108,7 +112,10 @@ function getImportPath(baseNode: ParsedAST, name: string) {
           : specifier.local.name;
 
       alias = name;
-      name = specifierName;
+      name = name
+        .split(".")
+        .map((namePart, i) => (i === 0 ? specifierName : namePart))
+        .join(".");
     }
   }
 
@@ -117,7 +124,7 @@ function getImportPath(baseNode: ParsedAST, name: string) {
     declaration?.specifiers?.some((specifier) => {
       return (
         specifier.type === "ImportDefaultSpecifier" &&
-        specifier.local.name === name
+        specifier.local.name === firstNamePart
       );
     })
   );
@@ -151,6 +158,10 @@ function analyzeComponent(
   const name = getComponentName(node);
   const importInfo = lookupNode(tsConfigPath, filePath, baseNode, name);
   const isResolved = "importPath" in importInfo;
+
+  if (name === "Animated.a") {
+    console.debug(importInfo);
+  }
 
   const instance: PossiblyResolvedComponentInstance = {
     alias: importInfo.alias,
