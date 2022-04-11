@@ -2,6 +2,7 @@ import raw from "./raw";
 import countComponents from "./countComponents";
 import countComponentsAndProps from "./countComponentsAndProps";
 import aliases from "./aliases";
+import propValues from "./prop-values";
 import path from "path";
 import { Report } from "../types";
 
@@ -10,6 +11,7 @@ const FORMATTERS = {
   count: countComponents,
   "count-props": countComponentsAndProps,
   aliases: aliases,
+  "prop-values": propValues,
 };
 
 export async function loadFormatter(formatterName: string | undefined) {

@@ -159,10 +159,6 @@ function analyzeComponent(
   const importInfo = lookupNode(tsConfigPath, filePath, baseNode, name);
   const isResolved = "importPath" in importInfo;
 
-  if (name === "Animated.a") {
-    console.debug(importInfo);
-  }
-
   const instance: PossiblyResolvedComponentInstance = {
     alias: importInfo.alias,
     name: importInfo.name,
