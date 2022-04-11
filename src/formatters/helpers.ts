@@ -13,5 +13,10 @@ export function sortEntries<T extends Record<string, any>>(
     b: [string, T[string]]
   ) => number
 ): T {
-  return Object.fromEntries(Object.entries(report).sort(callback)) as T;
+  return Object.fromEntries(
+    Object.entries(report).sort((a, b) => {
+      const res = callback(a, b);
+      return res === 0 ? a[0].localeCompare(b[0]) : res;
+    })
+  ) as T;
 }
