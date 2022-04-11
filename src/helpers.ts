@@ -41,7 +41,7 @@ export function resolveComponentInstances(
 
     let formattedImportPath = result.resolvedModule?.resolvedFileName;
 
-    if (formattedImportPath?.includes("node_modules")) {
+    if (formattedImportPath?.includes("node_modules") || !formattedImportPath) {
       external = true;
       formattedImportPath = instance.importIdentifier;
     } else if (formattedImportPath) {
@@ -49,8 +49,6 @@ export function resolveComponentInstances(
         dirname(tsConfigPath),
         formattedImportPath
       );
-    } else {
-      formattedImportPath = "Unknown";
     }
 
     return {

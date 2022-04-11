@@ -20,7 +20,6 @@ export async function crawlFile(
 
   while (filesToParse.length > 0) {
     const instances = filesToParse.reduce((acc, filePath) => {
-      if (filePath.endsWith("Unknown")) return acc;
       return acc.concat(parseFile(tsConfigPath, filePath));
     }, [] as PossiblyResolvedComponentInstance[]);
 
