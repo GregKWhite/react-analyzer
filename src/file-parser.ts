@@ -10,36 +10,67 @@ import {
 import { NodeLookupInfo, PossiblyResolvedComponentInstance } from "./types";
 import escodegen from "escodegen";
 import { walk } from "astray";
+import { CommonOptionTypes } from "./options";
 
 const PARSE_OPTIONS = { jsx: true, loc: true };
 
 type ParsedAST = AST<typeof PARSE_OPTIONS>;
 
-export function parseFile(tsConfigPath: string, filePath: string) {
+export function parseFile(filePath: string, options: CommonOptionTypes) {
   const contents = fs.readFileSync(filePath).toString();
   const ast = parse(contents, PARSE_OPTIONS);
 
-  return analyzeAst(tsConfigPath, filePath, ast);
+  return analyzeAst(filePath, ast, options);
 }
 
 function analyzeAst(
-  tsConfigPath: string,
   filePath: string,
-  ast: ParsedAST
+  ast: ParsedAST,
+  options: CommonOptionTypes
 ): PossiblyResolvedComponentInstance[] {
   let results: PossiblyResolvedComponentInstance[] = [];
   walk(ast, {
     // @ts-expect-error
     JSXOpeningElement(node: JSXOpeningElement) {
-      const componentInfo = analyzeComponent(tsConfigPath, filePath, ast, node);
+      const instance = analyzeComponent(
+        options.tsConfigPath,
+        filePath,
+        ast,
+        node
+      );
+
+      // If the match param is passed in, ignore components that don't match
+      if (options.match != null && !componentMatches(options.match, instance)) {
+        return;
+      }
 
       // Ignore built-in elements
-      if (componentInfo.builtin) return;
-      results.push(componentInfo);
+      if (instance.builtin) return;
+
+      results.push(instance);
     },
   });
 
   return results;
+}
+
+function componentMatches(
+  match: string,
+  instance: PossiblyResolvedComponentInstance
+) {
+  const { name } = instance;
+  if (name.toLowerCase() === match.toLowerCase()) {
+    return true;
+  } else if (name === "default" || name.startsWith("default.")) {
+    return "importPath" in instance
+      ? instance.importPath
+          .toLowerCase()
+          .endsWith(`/${match.toLowerCase()}.tsx`)
+      : instance.importIdentifier.toLowerCase() === match.toLowerCase() ||
+          instance.importIdentifier
+            .toLowerCase()
+            .endsWith(`/${match.toLowerCase()}`);
+  }
 }
 
 function lookupNode(

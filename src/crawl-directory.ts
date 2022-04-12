@@ -50,14 +50,16 @@ function loadFiles(project: Project, tsConfigPath: string): string[] {
 
 export async function crawlDirectory(
   project: Project,
-  { parallel: workerCount, tsConfigPath }: MainOptionTypes
+  options: MainOptionTypes
 ): Promise<Report> {
+  const { parallel, tsConfigPath } = options;
+
   const report: Report = { usage: {}, imports: {} };
   const sourceFiles = loadFiles(project, tsConfigPath);
   let totalFilesParsed = 0;
 
   const workers: ChildProcess[] = [];
-  workerCount = Math.max(workerCount, 1);
+  const workerCount = Math.max(parallel, 1);
 
   const next = getChunks(sourceFiles, workerCount);
 
@@ -67,7 +69,7 @@ export async function crawlDirectory(
 
   const pendingWorkers = workers.map((worker, i) => {
     return new Promise<typeof worker>((resolve) => {
-      worker.send({ tsConfigPath, paths: next() });
+      worker.send({ options, paths: next() });
 
       worker.on(
         "message",
@@ -88,7 +90,7 @@ export async function crawlDirectory(
             updateProgress(totalFilesParsed, sourceFiles.length);
           }
 
-          worker.send({ tsConfigPath, paths: next() });
+          worker.send({ options, paths: next() });
         }
       );
 

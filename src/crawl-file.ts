@@ -7,8 +7,9 @@ import { PossiblyResolvedComponentInstance, Report } from "./types";
 
 export async function crawlFile(
   project: Project,
-  { tsConfigPath, entryPoint }: CrawlOptionTypes
+  options: CrawlOptionTypes
 ): Promise<Report> {
+  const { tsConfigPath, entryPoint } = options;
   const report = { usage: {}, imports: {} };
 
   const entryPointPath = path.resolve(
@@ -20,7 +21,7 @@ export async function crawlFile(
 
   while (filesToParse.length > 0) {
     const instances = filesToParse.reduce((acc, filePath) => {
-      return acc.concat(parseFile(tsConfigPath, filePath));
+      return acc.concat(parseFile(filePath, options));
     }, [] as PossiblyResolvedComponentInstance[]);
 
     const resolvedInstances = resolveComponentInstances(

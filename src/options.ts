@@ -1,31 +1,25 @@
 import commandLineArgs, { OptionDefinition } from "command-line-args";
 
 const COMMON_OPTIONS = [
-  { name: "output", alias: "o", type: String },
-  { name: "formatter", alias: "f", type: String },
-] as const;
-
-const MAIN_OPTION_DEFINITIONS = [
-  ...COMMON_OPTIONS,
   {
     name: "tsConfigPath",
     alias: "c",
     type: String,
-    defaultOption: true,
     defaultValue: "./tsconfig.json",
   },
+  { name: "output", alias: "o", type: String },
+  { name: "formatter", alias: "f", type: String },
+  { name: "match", alias: "m", type: String },
+] as const;
+
+const MAIN_OPTION_DEFINITIONS = [
+  ...COMMON_OPTIONS,
   { name: "parallel", alias: "p", type: Number, defaultValue: 4 },
   { name: "entryPoint", alias: "e", type: String },
 ] as const;
 
 const CRAWL_OPTION_DEFINITIONS = [
   ...COMMON_OPTIONS,
-  {
-    name: "tsConfigPath",
-    alias: "c",
-    type: String,
-    defaultValue: "./tsconfig.json",
-  },
   { name: "entryPoint", alias: "e", type: String, defaultOption: true },
 ] as const;
 
@@ -37,7 +31,8 @@ type Options = (
 )[number];
 
 type MainOptions = typeof MAIN_OPTION_DEFINITIONS[number];
-type CrawlOptions = typeof MAIN_OPTION_DEFINITIONS[number];
+type CrawlOptions = typeof CRAWL_OPTION_DEFINITIONS[number];
+type CommonOptions = typeof COMMON_OPTIONS[number];
 
 type ExtractType<OptionName extends Options["name"]> = ReturnType<
   Extract<Options, { name: OptionName }>["type"]
@@ -55,6 +50,9 @@ export type MainOptionTypes = {
 };
 export type CrawlOptionTypes = {
   [OptionName in CrawlOptions["name"]]: OptionType<OptionName>;
+};
+export type CommonOptionTypes = {
+  [OptionName in CommonOptions["name"]]: OptionType<OptionName>;
 };
 export type OptionTypes = MainOptionTypes | CrawlOptionTypes;
 
