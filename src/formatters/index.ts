@@ -6,7 +6,7 @@ import propValues from "./prop-values";
 import path from "path";
 import { Report } from "../types";
 
-const FORMATTERS = {
+export const FORMATTERS = {
   raw: raw,
   count: countComponents,
   "count-props": countComponentsAndProps,

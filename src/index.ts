@@ -21,10 +21,10 @@ async function run(options: OptionTypes): Promise<void> {
   });
 
   let report: Report;
-  if (options.entryPoint) {
+  if ("entryPoint" in options) {
     report = await crawlFile(project, options);
   } else {
-    report = await crawlDirectory(project, options as MainOptionTypes);
+    report = await crawlDirectory(project, options);
   }
 
   const reportContents = JSON.stringify(processorFn(report), null, 2);
@@ -42,5 +42,12 @@ async function run(options: OptionTypes): Promise<void> {
 }
 
 if (!isChildProcess()) {
-  run(parseArguments());
+  const options = parseArguments();
+
+  if (options) {
+    run(options);
+  } else {
+    // This happens if the user runs the help command.
+    process.exit(0);
+  }
 }
