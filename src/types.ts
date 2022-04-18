@@ -6,8 +6,6 @@ export interface Report {
       instances: ComponentInstance[];
     };
   };
-
-  imports: Record<string, string>;
 }
 
 export interface ComponentInstance {

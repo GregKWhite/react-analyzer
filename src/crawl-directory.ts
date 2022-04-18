@@ -61,7 +61,7 @@ export async function crawlDirectory(
 ): Promise<Report> {
   const { parallel, tsConfigPath } = options;
 
-  const report: Report = { usage: {}, imports: {} };
+  const report: Report = { usage: {} };
   const sourceFiles = loadFiles(project, tsConfigPath);
   let totalFilesParsed = 0;
 

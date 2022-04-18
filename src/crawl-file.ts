@@ -10,7 +10,7 @@ export async function crawlFile(
   options: CrawlOptionTypes
 ): Promise<Report> {
   const { tsConfigPath, entryPoint } = options;
-  const report = { usage: {}, imports: {} };
+  const report = { usage: {} };
 
   const entryPointPath = path.resolve(
     path.join(path.dirname(tsConfigPath), entryPoint!)
