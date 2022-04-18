@@ -4,8 +4,13 @@ import {
   ComponentInstance,
   PossiblyResolvedComponentInstance,
   Report,
-  UnresolvedComponentInstance,
 } from "./types";
+
+export const CHILD_PROCESS_MARKER = "__CHILD_PROCESS_MARKER__";
+
+export function isChildProcess() {
+  return process.argv[2] === CHILD_PROCESS_MARKER;
+}
 
 export function buildReport(
   componentInstances: ComponentInstance[],

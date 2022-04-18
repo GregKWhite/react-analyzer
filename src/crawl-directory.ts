@@ -1,12 +1,19 @@
 import { ChildProcess, fork } from "child_process";
 import { Project } from "ts-morph";
+import { parseFile } from "./file-parser";
 import {
   buildReport,
+  CHILD_PROCESS_MARKER,
+  isChildProcess,
   resolveComponentInstances,
   updateProgress,
 } from "./helpers";
-import { MainOptionTypes } from "./options";
-import { ChildProcessMessage, Report } from "./types";
+import { CommonOptionTypes, MainOptionTypes } from "./options";
+import {
+  ChildProcessMessage,
+  PossiblyResolvedComponentInstance,
+  Report,
+} from "./types";
 
 const MAX_CHUNK_SIZE = 250;
 
@@ -64,7 +71,7 @@ export async function crawlDirectory(
   const next = getChunks(sourceFiles, workerCount);
 
   for (let i = 0; i < workerCount; i++) {
-    workers.push(fork("./dist/worker"));
+    workers.push(fork(__filename, [CHILD_PROCESS_MARKER]));
   }
 
   const pendingWorkers = workers.map((worker, i) => {
@@ -103,4 +110,28 @@ export async function crawlDirectory(
   await Promise.all(pendingWorkers);
 
   return report;
+}
+
+interface Params {
+  tsConfigPath: string;
+  paths: string[];
+  options: CommonOptionTypes;
+}
+
+if (isChildProcess()) {
+  process.on("message", ({ paths, options }: Params) => {
+    if (paths.length === 0) {
+      process.disconnect();
+      return;
+    }
+
+    const message: ChildProcessMessage = {
+      filesParsed: paths,
+      instances: paths.reduce((acc, path) => {
+        return acc.concat(parseFile(path, options));
+      }, [] as PossiblyResolvedComponentInstance[]),
+    };
+
+    process.send?.(message);
+  });
 }

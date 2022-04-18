@@ -18,9 +18,7 @@
       "outputFormat": "commonjs"
     }
   },
-  "bin": {
-    "react-analyzer": "dist/index.js"
-  },
+  "bin": "dist/index.js",
   "scripts": {
     "tsc": "tsc",
     "build": "parcel build",
