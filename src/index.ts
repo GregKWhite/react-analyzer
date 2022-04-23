@@ -17,6 +17,32 @@ function getProject(tsConfigPath: string) {
   });
 }
 
+function filterMatches(report: Report, match: string) {
+  const filteredReport: Report = { usage: {} };
+
+  const keys = Object.keys(report.usage).filter((componentKey) => {
+    const lastSlash = componentKey.lastIndexOf("/");
+    const name = componentKey.substring(lastSlash + 1);
+    const componentPath = componentKey.substring(0, lastSlash);
+
+    if (name.toLowerCase() === match.toLowerCase()) {
+      return true;
+    } else if (name === "default" || name.startsWith("default.")) {
+      return (
+        componentPath.toLowerCase() === match.toLowerCase() ||
+        componentPath.toLowerCase().endsWith(`/${match.toLowerCase()}.tsx`) ||
+        componentPath.toLowerCase().endsWith(`/${match.toLowerCase()}`)
+      );
+    }
+  });
+
+  keys.forEach((key) => {
+    filteredReport.usage[key] = report.usage[key];
+  });
+
+  return filteredReport;
+}
+
 async function run(options: OptionTypes): Promise<void> {
   if (options.command === "help") {
     console.log(USAGE_DOCS);
@@ -37,6 +63,10 @@ async function run(options: OptionTypes): Promise<void> {
   } else {
     console.error("Unknown command");
     process.exit(1);
+  }
+
+  if (options.match) {
+    report = filterMatches(report, options.match);
   }
 
   const reportContents = JSON.stringify(processorFn(report), null, 2);

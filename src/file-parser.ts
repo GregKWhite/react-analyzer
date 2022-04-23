@@ -39,11 +39,6 @@ function analyzeAst(
         node
       );
 
-      // If the match param is passed in, ignore components that don't match
-      if (options.match != null && !componentMatches(options.match, instance)) {
-        return;
-      }
-
       // Ignore built-in elements
       if (instance.builtin) return;
 
@@ -52,25 +47,6 @@ function analyzeAst(
   });
 
   return results;
-}
-
-function componentMatches(
-  match: string,
-  instance: PossiblyResolvedComponentInstance
-) {
-  const { name } = instance;
-  if (name.toLowerCase() === match.toLowerCase()) {
-    return true;
-  } else if (name === "default" || name.startsWith("default.")) {
-    return "importPath" in instance
-      ? instance.importPath
-          .toLowerCase()
-          .endsWith(`/${match.toLowerCase()}.tsx`)
-      : instance.importIdentifier.toLowerCase() === match.toLowerCase() ||
-          instance.importIdentifier
-            .toLowerCase()
-            .endsWith(`/${match.toLowerCase()}`);
-  }
 }
 
 function lookupNode(

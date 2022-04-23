@@ -77,6 +77,7 @@ const FORMAT_OPTION_DEFINITIONS = [
   },
   COMMON_OPTIONS[1],
   COMMON_OPTIONS[2],
+  COMMON_OPTIONS[3],
 ] as const;
 
 type Options = (
@@ -260,6 +261,11 @@ export const USAGE_DOCS = commandLineUsage([
         example:
           "$ react-analyzer format path/to/report.json -f count -o counts.json",
         desc: "Run the `count` formatter on the raw report on path/to/report.json, outputting the results to counts.json",
+      },
+      {
+        example:
+          "$ react-analyzer format path/to/report.json -m Text -f count -o counts.json",
+        desc: "Run the `count` formatter on the raw report on path/to/report.json, filtering to Text components, outputting the results to counts.json",
       },
     ],
   },
