@@ -1,6 +1,8 @@
 import commandLineArgs, { OptionDefinition } from "command-line-args";
-import commandLineUsage from "command-line-usage";
+import commandLineUsage, { Section } from "command-line-usage";
 import { FORMATTERS } from "./formatters";
+
+type Writeable<T> = { -readonly [P in keyof T]: T[P] };
 
 const COMMON_OPTIONS = [
   {
@@ -61,11 +63,12 @@ const CRAWL_OPTION_DEFINITIONS = [
   ...COMMON_OPTIONS,
 ] as const;
 
-type Writeable<T> = { -readonly [P in keyof T]: T[P] };
+const HELP_OPTION_DEFINITIONS = [] as const;
 
 type Options = (
   | typeof MAIN_OPTION_DEFINITIONS
   | typeof CRAWL_OPTION_DEFINITIONS
+  | typeof HELP_OPTION_DEFINITIONS
 )[number];
 
 // Dummy type to ensure all option definitions have a description
@@ -95,9 +98,42 @@ export type CrawlOptionTypes = {
 export type CommonOptionTypes = {
   [OptionName in CommonOptions["name"]]: OptionType<OptionName>;
 };
-export type OptionTypes = MainOptionTypes | CrawlOptionTypes;
 
-const USAGE_DOCS = [
+export type OptionTypes =
+  | { command: "help" }
+  | ({ command: "main" } & MainOptionTypes)
+  | ({ command: "crawl" } & CrawlOptionTypes);
+
+export function parseArguments(): OptionTypes {
+  const mainConfig: OptionDefinition[] = [
+    { name: "command", defaultOption: true },
+    { name: "help", alias: "h", type: Boolean },
+  ];
+
+  const mainOptions = commandLineArgs(mainConfig, { stopAtFirstUnknown: true });
+  const argv = mainOptions._unknown || [];
+
+  let definitions;
+  let command: OptionTypes["command"];
+
+  if (mainOptions.command === "help" || mainOptions.help) {
+    command = "help";
+    definitions = HELP_OPTION_DEFINITIONS;
+  } else if (mainOptions.command === "crawl") {
+    command = "crawl";
+    definitions = CRAWL_OPTION_DEFINITIONS;
+  } else {
+    command = "main";
+    definitions = MAIN_OPTION_DEFINITIONS;
+  }
+
+  return {
+    command,
+    ...commandLineArgs(definitions as Writeable<typeof definitions>, { argv }),
+  } as OptionTypes;
+}
+
+export const USAGE_DOCS = commandLineUsage([
   {
     header: "react-analyzer",
     content:
@@ -118,38 +154,75 @@ const USAGE_DOCS = [
     ],
   },
   {
-    header: "main options",
+    header: "main command options",
     optionList: MAIN_OPTION_DEFINITIONS,
   },
   {
-    header: "crawl options",
+    header: "crawl subcommand options",
     optionList: CRAWL_OPTION_DEFINITIONS,
   },
-];
+  {
+    header: "Examples",
+    content: [
+      {
+        example: "$ react-analyzer",
+        desc: "Generate a component report for files referenced in the local tsconfig",
+      },
+      {
+        example: "$ react-analyzer -c ./some/dir/tsconfig.json",
+        desc: "Generate a component report for files referenced in the local tsconfig",
+      },
+      {
+        example: "$ react-analyzer -o output.json",
+        desc: "Generate a component report for files referenced by the local tsconfig and output the results to output.json",
+      },
+      {
+        example: "$ react-analyzer -f count",
+        desc: "Count all component usages",
+      },
+      {
+        example: "$ react-analyzer -f count-props",
+        desc: "Count usages of each components' props",
+      },
+      {
+        example: "$ react-analyzer -f prop-values",
+        desc: "Show the number of times each unique prop value is used by each component",
+      },
+      {
+        example: "$ react-analyzer -f aliases",
+        desc: "Show the names used by each component",
+      },
+      {
+        example: "$ react-analyzer -f ./path/to/formatter.js",
+        desc: "Generate a report for files referenced in the local tsconfig, formatting it using the default function exported by the specified path",
+      },
+      {
+        example: "$ react-analyzer -m Text",
+        desc: "Generate a component report for components named 'Text'",
+      },
+      {
+        example: "$ react-analyzer -o output.json -f count -m Text",
+        desc: "Show the number of Text components rendered in files referenced by the local tsconfig, outputting the results to output.json",
+      },
 
-export function parseArguments(): OptionTypes | undefined {
-  const mainConfig: OptionDefinition[] = [
-    { name: "command", defaultOption: true },
-    { name: "help", alias: "h", type: Boolean },
-  ];
-
-  const mainOptions = commandLineArgs(mainConfig, { stopAtFirstUnknown: true });
-  const argv = mainOptions._unknown || [];
-
-  let definitions;
-
-  if (mainOptions.command === "help" || mainOptions.help) {
-    console.log(commandLineUsage(USAGE_DOCS));
-    return;
-  } else if (mainOptions.command === "crawl") {
-    definitions = CRAWL_OPTION_DEFINITIONS as Writeable<
-      typeof CRAWL_OPTION_DEFINITIONS
-    >;
-  } else {
-    definitions = MAIN_OPTION_DEFINITIONS as Writeable<
-      typeof MAIN_OPTION_DEFINITIONS
-    >;
-  }
-
-  return commandLineArgs(definitions, { argv }) as OptionTypes;
-}
+      {
+        example: "$ react-analyzer crawl src/Button.tsx",
+        desc: "Parse src/Button.tsx, recursively crawl rendered components, and generate a report for all components rendered in those files",
+      },
+      {
+        example: "$ react-analyzer crawl src/Button.tsx -o output.json",
+        desc: "Parse src/Button.tsx, recursively crawl rendered components, and generate a report, outputting the results to output.json",
+      },
+      {
+        example:
+          "$ react-analyzer crawl src/Button.tsx -o output.json -f count",
+        desc: "Parse src/Button.tsx, recursively crawl rendered components, and count the rendered components, outputting the results to output.json",
+      },
+      {
+        example:
+          "$ react-analyzer crawl src/Button.tsx -o output.json -f count -m Text",
+        desc: "Parse src/Button.tsx, recursively crawl rendered components, and count the rendered components, outputting the results to output.json",
+      },
+    ],
+  },
+] as Writeable<Section[]>);

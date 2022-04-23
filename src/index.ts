@@ -4,12 +4,17 @@ import fs from "fs";
 import { Project } from "ts-morph";
 import { Report } from "./types";
 import { loadFormatter } from "./formatters";
-import { MainOptionTypes, OptionTypes, parseArguments } from "./options";
+import { OptionTypes, parseArguments, USAGE_DOCS } from "./options";
 import { crawlDirectory } from "./crawl-directory";
 import { crawlFile } from "./crawl-file";
 import { isChildProcess } from "./helpers";
 
 async function run(options: OptionTypes): Promise<void> {
+  if (options.command === "help") {
+    console.log(USAGE_DOCS);
+    process.exit(0);
+  }
+
   const processorFn = await loadFormatter(options.formatter);
 
   const startTime = process.hrtime.bigint();
@@ -21,10 +26,13 @@ async function run(options: OptionTypes): Promise<void> {
   });
 
   let report: Report;
-  if ("entryPoint" in options) {
+  if (options.command === "crawl") {
     report = await crawlFile(project, options);
-  } else {
+  } else if (options.command === "main") {
     report = await crawlDirectory(project, options);
+  } else {
+    console.error("Unknown command");
+    process.exit(1);
   }
 
   const reportContents = JSON.stringify(processorFn(report), null, 2);
@@ -42,12 +50,5 @@ async function run(options: OptionTypes): Promise<void> {
 }
 
 if (!isChildProcess()) {
-  const options = parseArguments();
-
-  if (options) {
-    run(options);
-  } else {
-    // This happens if the user runs the help command.
-    process.exit(0);
-  }
+  run(parseArguments());
 }
