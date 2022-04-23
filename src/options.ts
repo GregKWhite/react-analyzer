@@ -65,10 +65,25 @@ const CRAWL_OPTION_DEFINITIONS = [
 
 const HELP_OPTION_DEFINITIONS = [] as const;
 
+const FORMAT_OPTION_DEFINITIONS = [
+  {
+    name: "report",
+    alias: "r",
+    type: String,
+    defaultOption: true,
+    defaultValue: "report.json",
+    description: 'Path to the report file to format (default "report.json")',
+    typeLabel: "file",
+  },
+  COMMON_OPTIONS[1],
+  COMMON_OPTIONS[2],
+] as const;
+
 type Options = (
   | typeof MAIN_OPTION_DEFINITIONS
   | typeof CRAWL_OPTION_DEFINITIONS
   | typeof HELP_OPTION_DEFINITIONS
+  | typeof FORMAT_OPTION_DEFINITIONS
 )[number];
 
 // Dummy type to ensure all option definitions have a description
@@ -77,6 +92,7 @@ type _OptionCheck = Options["description"] & Options["typeLabel"];
 type MainOptions = typeof MAIN_OPTION_DEFINITIONS[number];
 type CrawlOptions = typeof CRAWL_OPTION_DEFINITIONS[number];
 type CommonOptions = typeof COMMON_OPTIONS[number];
+type FormatOptions = typeof FORMAT_OPTION_DEFINITIONS[number];
 
 type ExtractType<OptionName extends Options["name"]> = ReturnType<
   Extract<Options, { name: OptionName }>["type"]
@@ -89,20 +105,20 @@ type OptionType<OptionName extends Options["name"]> = Extract<
   ? ExtractType<OptionName>
   : ExtractType<OptionName> | undefined;
 
-export type MainOptionTypes = {
-  [OptionName in MainOptions["name"]]: OptionType<OptionName>;
+type MappedOptions<O extends Options> = {
+  [OptionName in O["name"]]: OptionType<OptionName>;
 };
-export type CrawlOptionTypes = {
-  [OptionName in CrawlOptions["name"]]: OptionType<OptionName>;
-};
-export type CommonOptionTypes = {
-  [OptionName in CommonOptions["name"]]: OptionType<OptionName>;
-};
+
+export type MainOptionTypes = MappedOptions<MainOptions>;
+export type CrawlOptionTypes = MappedOptions<CrawlOptions>;
+export type CommonOptionTypes = MappedOptions<CommonOptions>;
+export type FormatOptionTypes = MappedOptions<FormatOptions>;
 
 export type OptionTypes =
   | { command: "help" }
   | ({ command: "main" } & MainOptionTypes)
-  | ({ command: "crawl" } & CrawlOptionTypes);
+  | ({ command: "crawl" } & CrawlOptionTypes)
+  | ({ command: "format" } & FormatOptionTypes);
 
 export function parseArguments(): OptionTypes {
   const mainConfig: OptionDefinition[] = [
@@ -122,6 +138,9 @@ export function parseArguments(): OptionTypes {
   } else if (mainOptions.command === "crawl") {
     command = "crawl";
     definitions = CRAWL_OPTION_DEFINITIONS;
+  } else if (mainOptions.command === "format") {
+    command = "format";
+    definitions = FORMAT_OPTION_DEFINITIONS;
   } else {
     command = "main";
     definitions = MAIN_OPTION_DEFINITIONS;
@@ -151,6 +170,7 @@ export const USAGE_DOCS = commandLineUsage([
     content: [
       "{bold main} - Analyzes all files specified by the tsconfig.json",
       "{bold crawl} - Recursively analyzes the file specified by the entryPoint option, and any files referenced by it",
+      "{bold format} - Formats the raw report file specified by the report option (requires a `raw` formatted report)",
     ],
   },
   {
@@ -160,6 +180,10 @@ export const USAGE_DOCS = commandLineUsage([
   {
     header: "crawl subcommand options",
     optionList: CRAWL_OPTION_DEFINITIONS,
+  },
+  {
+    header: "format subcommand options",
+    optionList: FORMAT_OPTION_DEFINITIONS,
   },
   {
     header: "Examples",
@@ -222,6 +246,20 @@ export const USAGE_DOCS = commandLineUsage([
         example:
           "$ react-analyzer crawl src/Button.tsx -o output.json -f count -m Text",
         desc: "Parse src/Button.tsx, recursively crawl rendered components, and count the rendered components, outputting the results to output.json",
+      },
+
+      {
+        example: "$ react-analyzer format -f count",
+        desc: "Run the `count` formatter on the raw report on report.json",
+      },
+      {
+        example: "$ react-analyzer format path/to/report.json -f count",
+        desc: "Run the `count` formatter on the raw report on path/to/report.json",
+      },
+      {
+        example:
+          "$ react-analyzer format path/to/report.json -f count -o counts.json",
+        desc: "Run the `count` formatter on the raw report on path/to/report.json, outputting the results to counts.json",
       },
     ],
   },

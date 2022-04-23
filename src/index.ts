@@ -9,6 +9,14 @@ import { crawlDirectory } from "./crawl-directory";
 import { crawlFile } from "./crawl-file";
 import { isChildProcess } from "./helpers";
 
+function getProject(tsConfigPath: string) {
+  return new Project({
+    tsConfigFilePath: tsConfigPath,
+    skipFileDependencyResolution: true,
+    skipAddingFilesFromTsConfig: true,
+  });
+}
+
 async function run(options: OptionTypes): Promise<void> {
   if (options.command === "help") {
     console.log(USAGE_DOCS);
@@ -19,17 +27,13 @@ async function run(options: OptionTypes): Promise<void> {
 
   const startTime = process.hrtime.bigint();
 
-  const project = new Project({
-    tsConfigFilePath: options.tsConfigPath,
-    skipFileDependencyResolution: true,
-    skipAddingFilesFromTsConfig: true,
-  });
-
   let report: Report;
   if (options.command === "crawl") {
-    report = await crawlFile(project, options);
+    report = await crawlFile(getProject(options.tsConfigPath), options);
   } else if (options.command === "main") {
-    report = await crawlDirectory(project, options);
+    report = await crawlDirectory(getProject(options.tsConfigPath), options);
+  } else if (options.command === "format") {
+    report = JSON.parse(fs.readFileSync(options.report).toString());
   } else {
     console.error("Unknown command");
     process.exit(1);
