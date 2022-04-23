@@ -25,7 +25,8 @@ export async function loadFormatter(formatterName: string | undefined) {
       const processorFile = await import(pathName);
       return processorFile.default as (report: Report) => Record<string, any>;
     } catch (e) {
-      throw new Error(`Could not load reporter ${formatterName}`);
+      console.error(`Could not load reporter ${formatterName}`);
+      throw e;
     }
   }
 }
