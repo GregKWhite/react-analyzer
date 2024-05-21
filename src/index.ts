@@ -20,20 +20,10 @@ function getProject(tsConfigPath: string) {
 function filterMatches(report: Report, match: string) {
   const filteredReport: Report = { usage: {} };
 
-  const keys = Object.keys(report.usage).filter((componentKey) => {
-    const lastSlash = componentKey.lastIndexOf("/");
-    const name = componentKey.substring(lastSlash + 1);
-    const componentPath = componentKey.substring(0, lastSlash);
+  const regex = RegExp(match, "i");
 
-    if (name.toLowerCase() === match.toLowerCase()) {
-      return true;
-    } else if (name === "default" || name.startsWith("default.")) {
-      return (
-        componentPath.toLowerCase() === match.toLowerCase() ||
-        componentPath.toLowerCase().endsWith(`/${match.toLowerCase()}.tsx`) ||
-        componentPath.toLowerCase().endsWith(`/${match.toLowerCase()}`)
-      );
-    }
+  const keys = Object.keys(report.usage).filter((componentKey) => {
+    return regex.test(componentKey);
   });
 
   keys.forEach((key) => {

@@ -35,7 +35,7 @@ const COMMON_OPTIONS = [
     type: String,
     typeLabel: "name",
     description:
-      "Case insensitive string to match against component names. If the component is a default export, this will attempt to match against the file name if it is a local file, or the import path if it is an external file",
+      "Case insensitive regex to match against component names or paths.",
   },
 ] as const;
 
