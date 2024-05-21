@@ -71,7 +71,7 @@ export async function crawlDirectory(
   const next = getChunks(sourceFiles, workerCount);
 
   for (let i = 0; i < workerCount; i++) {
-    workers.push(fork(__filename, [CHILD_PROCESS_MARKER]));
+    workers.push(fork(process.argv[1], [CHILD_PROCESS_MARKER]));
   }
 
   const pendingWorkers = workers.map((worker, i) => {
