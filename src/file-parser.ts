@@ -1,49 +1,51 @@
+import { SgNode, tsx } from "@ast-grep/napi";
 import fs from "fs";
 import * as path from "path";
-import { AST, parse } from "@typescript-eslint/typescript-estree";
-import {
-  ImportDeclaration,
-  JSXAttribute,
-  JSXOpeningElement,
-  Literal,
-} from "estree-jsx";
 import { NodeLookupInfo, PossiblyResolvedComponentInstance } from "./types";
-import escodegen from "escodegen";
-import { walk } from "astray";
 import { CommonOptionTypes } from "./options";
 
-const PARSE_OPTIONS = { jsx: true, loc: true };
-
-type ParsedAST = AST<typeof PARSE_OPTIONS>;
+const cwd = process.cwd();
 
 export function parseFile(filePath: string, options: CommonOptionTypes) {
   const contents = fs.readFileSync(filePath).toString();
-  const ast = parse(contents, PARSE_OPTIONS);
+  const ast = tsx.parse(contents);
 
-  return analyzeAst(filePath, ast, options);
+  return analyzeAst(filePath, ast.root(), options);
 }
 
 function analyzeAst(
   filePath: string,
-  ast: ParsedAST,
+  ast: SgNode,
   options: CommonOptionTypes
 ): PossiblyResolvedComponentInstance[] {
   let results: PossiblyResolvedComponentInstance[] = [];
-  walk(ast, {
-    // @ts-expect-error
-    JSXOpeningElement(node: JSXOpeningElement) {
-      const instance = analyzeComponent(
-        options.tsConfigPath,
-        filePath,
-        ast,
-        node
-      );
 
-      // Ignore built-in elements
-      if (instance.builtin) return;
-
-      results.push(instance);
+  const jsxElements = ast.findAll({
+    rule: {
+      pattern: "$IDENTIFIER",
+      any: [{ kind: "identifier" }, { kind: "member_expression" }],
+      inside: {
+        pattern: "$ELEMENT",
+        any: [
+          { kind: "jsx_opening_element" },
+          { kind: "jsx_self_closing_element" },
+        ],
+      },
     },
+  });
+
+  jsxElements.forEach((element) => {
+    const instance = analyzeComponent(
+      options.tsConfigPath,
+      filePath,
+      ast,
+      element
+    );
+
+    // Ignore built-in elements
+    if (instance.builtin) return;
+
+    results.push(instance);
   });
 
   return results;
@@ -52,12 +54,12 @@ function analyzeAst(
 function lookupNode(
   tsConfigPath: string,
   filePath: string,
-  baseNode: ParsedAST,
+  ast: SgNode,
   name: string
 ): NodeLookupInfo {
   return (
     getBuiltinName(name) ??
-    getImportPath(baseNode, name) ??
+    getImportPath(ast, name) ??
     getLocalPath(tsConfigPath, filePath, name) ?? {
       path: "Unknown",
       alias: undefined,
@@ -66,7 +68,7 @@ function lookupNode(
 }
 
 function isBuiltIn(name: string) {
-  return name === name.toLowerCase() || name.startsWith("React.");
+  return name[0].toLowerCase() === name[0] || name.startsWith("React.");
 }
 
 function getBuiltinName(name: string) {
@@ -83,150 +85,156 @@ function getLocalPath(tsConfigPath: string, filePath: string, name: string) {
   };
 }
 
-function getImportPath(baseNode: ParsedAST, name: string) {
-  let declaration: ImportDeclaration | undefined;
-  let found = false;
-  let alias: string | undefined;
-
+function getImportPath(ast: SgNode, name: string) {
   // Handle components of the form Foo.Bar. We want to match against 'Foo', not
   // 'Foo.Bar' later on when we try to find the component's import
-  const firstNamePart = name.split(".")[0];
-
-  walk(baseNode, {
-    ImportDeclaration: {
-      enter(node) {
-        if (!found) declaration = node;
+  const [firstNamePart, ...restName] = name.split(".");
+  const matchingRegex = `^${firstNamePart}$`;
+  const imports = ast.findAll({
+    rule: {
+      pattern: "$IMPORT",
+      kind: "import_statement",
+      has: {
+        stopBy: "end",
+        any: [
+          {
+            kind: "identifier",
+            pattern: "$IDENTIFIER",
+            inside: {
+              has: {
+                kind: "identifier",
+                pattern: "$ALIAS",
+                field: "alias",
+                regex: matchingRegex,
+              },
+            },
+          },
+          { kind: "identifier", pattern: "$IDENTIFIER", regex: matchingRegex },
+        ],
       },
-      exit() {
-        if (!found) declaration = undefined;
-      },
-    },
-
-    Identifier(node) {
-      if (declaration && node.name === firstNamePart) found = true;
     },
   });
 
-  if (declaration) {
-    const specifier = declaration.specifiers.find((specifier) => {
-      return specifier.local.name === firstNamePart;
-    });
+  const importInfo = imports.find((importNode) => {
+    const identifier = (importNode.getMatch("ALIAS") ??
+      importNode.getMatch("IDENTIFIER"))!.text();
+    return identifier === firstNamePart;
+  });
 
-    if (specifier) {
-      const specifierName =
-        "imported" in specifier
-          ? specifier.imported.name
-          : specifier.local.name;
+  if (importInfo == null) return;
 
-      alias = name;
-      name = name
-        .split(".")
-        .map((namePart, i) => (i === 0 ? specifierName : namePart))
-        .join(".");
-    }
-  }
-
-  const importIdentifier = declaration?.source?.value?.toString();
   const isDefaultImport = Boolean(
-    declaration?.specifiers?.some((specifier) => {
-      return (
-        specifier.type === "ImportDefaultSpecifier" &&
-        specifier.local.name === firstNamePart
-      );
+    importInfo.find({
+      rule: {
+        kind: "import_clause",
+        has: {
+          kind: "identifier",
+          pattern: name,
+        },
+      },
     })
   );
 
-  if (importIdentifier) {
-    const formattedName = isDefaultImport
-      ? name
-          .split(".")
-          .map((namePart, i) => (i === 0 ? "default" : namePart))
-          .join(".")
-      : name;
-
-    return {
-      name: formattedName,
-      alias,
-      importIdentifier,
-    };
+  let formattedName;
+  if (isDefaultImport) {
+    formattedName = ["default", ...restName].join(".");
+  } else {
+    formattedName = [
+      importInfo.getMatch("IDENTIFIER")!.text(),
+      ...restName,
+    ].join(".");
   }
+
+  return {
+    name: formattedName,
+    alias: importInfo.getMatch("ALIAS")?.text(),
+    importIdentifier: importInfo
+      .find({
+        rule: { has: { stopBy: "end", kind: "string_fragment" } },
+      })!
+      .text(),
+    position: importInfo.getMatch("IDENTIFIER")!.range().start,
+  };
 }
 
 function relativePath(tsConfigPath: string, filePath: string) {
-  return path.relative(path.dirname(tsConfigPath), filePath);
+  return path.relative(path.join(cwd, path.dirname(tsConfigPath)), filePath);
 }
 
 function analyzeComponent(
   tsConfigPath: string,
   filePath: string,
-  baseNode: ParsedAST,
-  node: JSXOpeningElement
+  baseNode: SgNode,
+  node: SgNode
 ): PossiblyResolvedComponentInstance {
-  const name = getComponentName(node);
+  const name = node.getMatch("IDENTIFIER")!.text();
   const importInfo = lookupNode(tsConfigPath, filePath, baseNode, name);
   const isResolved = "importPath" in importInfo;
+
+  const element = node.getMatch("ELEMENT")!;
+  const elementRange = element.range();
+  const children = element.children();
 
   const instance: PossiblyResolvedComponentInstance = {
     alias: importInfo.alias,
     name: importInfo.name,
     location: {
       file: relativePath(tsConfigPath, filePath),
-      start: node.loc?.start,
-      end: node.loc?.end,
+      absolutePath: filePath,
+      start: {
+        line: elementRange.start.line + 1,
+        column: elementRange.start.column,
+      },
+      end: {
+        line: elementRange.end.line + 1,
+        column: elementRange.end.column,
+      },
     },
     props: {},
-    spread: false,
-    hasChildren: !node.selfClosing,
+    spread: children.some((c) => c.kind() === "jsx_expression"),
+    hasChildren:
+      element.kind() === "jsx_opening_element" &&
+      element.next()?.kind() === "jsx_element",
     builtin: isBuiltIn(name),
     external: !isResolved,
     ...("importIdentifier" in importInfo
-      ? { importIdentifier: importInfo.importIdentifier }
+      ? {
+          importIdentifier: importInfo.importIdentifier,
+          importPosition: importInfo.position,
+        }
       : { importPath: importInfo.path }),
   };
 
-  node.attributes.forEach((attribute) => {
-    const { loc: attributeLocation } = attribute;
-    if (attribute.type === "JSXAttribute") {
-      instance.props[attribute.name.name.toString()] = {
-        value: getPropValue(attribute),
-        location: `${instance.location.file}:${attributeLocation?.start.line}:${attributeLocation?.start.column}`,
+  const attributes = children.filter((c) => c.kind() === "jsx_attribute");
+  attributes.forEach((attr) => {
+    const identifier = attr.find({
+      rule: { kind: "property_identifier" },
+    });
+    const value = attr.find({
+      rule: { any: [{ kind: "string_fragment" }, { kind: "jsx_expression" }] },
+    });
+
+    if (identifier && value) {
+      const range = attr.range();
+      let formattedValue = value.text();
+
+      if (value.kind() === "jsx_expression") {
+        formattedValue = formattedValue.slice(1, -1);
+      }
+
+      // Ensure string values are wrapped in qzuotes
+      if (value.kind() === "string_fragment") {
+        formattedValue = `'${formattedValue}'`;
+      }
+
+      instance.props[identifier.text()] = {
+        value: formattedValue,
+        location: `${relativePath(tsConfigPath, filePath)}:${
+          range.start.line + 1
+        }:${range.start.column}`,
       };
-    } else {
-      instance.spread = true;
     }
   });
 
   return instance;
-}
-
-function getComponentName(node: JSXOpeningElement): string {
-  const { name: identifier } = node;
-  if ("name" in identifier) {
-    return identifier.name.toString();
-  } else if (identifier.type === "JSXMemberExpression") {
-    const identifierName =
-      identifier.object.type === "JSXIdentifier"
-        ? identifier.object.name
-        : identifier.object.property.name;
-
-    return [identifierName, identifier.property.name].join(".");
-  } else {
-    throw new Error(
-      `Unknown component name type ${JSON.stringify(identifier, null, 2)}`
-    );
-  }
-}
-
-function getPropValue(attribute: JSXAttribute): Literal["value"] {
-  const { value } = attribute;
-
-  if (value == null) {
-    return true;
-  } else if (value.type === "Literal") {
-    return value.value;
-  } else if (value.type === "JSXExpressionContainer") {
-    return escodegen.generate(value.expression) as string;
-  } else {
-    throw new Error(`Unknown value type "${value}"`);
-  }
 }

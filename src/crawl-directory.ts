@@ -80,7 +80,7 @@ export async function crawlDirectory(
 
       worker.on(
         "message",
-        ({ instances, filesParsed }: ChildProcessMessage) => {
+        async ({ instances, filesParsed }: ChildProcessMessage) => {
           if (filesParsed.length === 0) return;
 
           totalFilesParsed += filesParsed.length;
@@ -91,7 +91,7 @@ export async function crawlDirectory(
             project
           );
 
-          buildReport(resolvedInstances, report);
+          await buildReport(resolvedInstances, report);
 
           if (totalFilesParsed <= sourceFiles.length) {
             updateProgress(totalFilesParsed, sourceFiles.length);

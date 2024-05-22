@@ -18,6 +18,7 @@ export interface ComponentInstance {
 
   location: {
     file: string;
+    absolutePath: string;
     start?: Position;
     end?: Position;
   };
@@ -35,11 +36,20 @@ export interface ComponentInstance {
 export type UnresolvedComponentInstance = Omit<
   ComponentInstance,
   "importPath"
-> & { importIdentifier: string };
+> & {
+  importIdentifier: string;
+  importPosition: ImportPosition;
+};
 
 export type PossiblyResolvedComponentInstance =
   | ComponentInstance
   | UnresolvedComponentInstance;
+
+interface ImportPosition {
+  line: number;
+  column: number;
+  index: number;
+}
 
 export type NodeLookupInfo =
   | { name: string; path: string; alias: string | undefined }
@@ -47,6 +57,7 @@ export type NodeLookupInfo =
       name: string;
       alias: string | undefined;
       importIdentifier: string;
+      position: ImportPosition;
     };
 
 export type ChildProcessMessage = {

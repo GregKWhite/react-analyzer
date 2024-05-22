@@ -1,10 +1,13 @@
-import { Project, ts } from "ts-morph";
-import { join, relative, dirname } from "path";
+import { Project, Identifier } from "ts-morph";
+import path, { relative, dirname } from "path";
 import {
   ComponentInstance,
   PossiblyResolvedComponentInstance,
   Report,
 } from "./types";
+import { Sema } from "async-sema";
+
+const cwd = process.cwd();
 
 export const CHILD_PROCESS_MARKER = "__CHILD_PROCESS_MARKER__";
 
@@ -12,19 +15,26 @@ export function isChildProcess() {
   return process.argv[2] === CHILD_PROCESS_MARKER;
 }
 
-export function buildReport(
+const sema = new Sema(1);
+
+export async function buildReport(
   componentInstances: ComponentInstance[],
   report: Report
 ) {
-  componentInstances.forEach((componentInstance) => {
-    const key = `${componentInstance.importPath}/${componentInstance.name}`;
+  await sema.acquire();
+  try {
+    componentInstances.forEach((componentInstance) => {
+      const key = `${componentInstance.importPath}/${componentInstance.name}`;
 
-    if (!report.usage[key]) {
-      report.usage[key] = { instances: [] };
-    }
+      if (report.usage[key] == null) {
+        report.usage[key] = { instances: [] };
+      }
 
-    report.usage[key].instances.push(componentInstance);
-  });
+      report.usage[key].instances.push(componentInstance);
+    });
+  } finally {
+    sema.release();
+  }
 }
 
 export function resolveComponentInstances(
@@ -37,21 +47,27 @@ export function resolveComponentInstances(
 
     let external = false;
 
-    const result = ts.resolveModuleName(
-      instance.importIdentifier,
-      join(dirname(tsConfigPath), instance.location.file),
-      project.getCompilerOptions(),
-      project.getModuleResolutionHost()
-    );
+    const sourceFile = project.getSourceFile(instance.location.absolutePath);
+    const definition = (
+      sourceFile?.getDescendantAtPos(instance.importPosition.index) as
+        | Identifier
+        | undefined
+    )?.getDefinitions()[0];
 
-    let formattedImportPath = result.resolvedModule?.resolvedFileName;
+    let formattedImportPath = definition?.getSourceFile()?.getFilePath() as
+      | string
+      | undefined;
 
-    if (formattedImportPath?.includes("node_modules") || !formattedImportPath) {
+    if (
+      formattedImportPath?.includes("node_modules") ||
+      !formattedImportPath ||
+      !formattedImportPath.startsWith("/")
+    ) {
       external = true;
       formattedImportPath = instance.importIdentifier;
     } else if (formattedImportPath) {
       formattedImportPath = relative(
-        dirname(tsConfigPath),
+        path.join(cwd, dirname(tsConfigPath)),
         formattedImportPath
       );
     }
