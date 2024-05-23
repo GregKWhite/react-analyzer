@@ -24,7 +24,6 @@ export function propValueCombinations(report: Report) {
           (prop) => `${prop}: ${instance.props[prop].value}`
         )
       );
-      // const props = new Set(Object.keys(instance.props));
       if (instance.spread) props.add("...");
       if (instance.hasChildren) props.add("children");
 

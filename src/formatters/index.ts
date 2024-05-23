@@ -6,7 +6,7 @@ import propValues from "./prop-values";
 import path from "path";
 import { Report } from "../types";
 import propCombinations from "./prop-combinations";
-import { propValueCombinations } from "./prop-value-combinations.ts";
+import { propValueCombinations } from "./prop-value-combinations";
 
 export const FORMATTERS = {
   raw: raw,
