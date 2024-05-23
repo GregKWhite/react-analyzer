@@ -5,6 +5,8 @@ import aliases from "./aliases";
 import propValues from "./prop-values";
 import path from "path";
 import { Report } from "../types";
+import propCombinations from "./prop-combinations";
+import { propValueCombinations } from "./prop-value-combinations.ts";
 
 export const FORMATTERS = {
   raw: raw,
@@ -12,6 +14,8 @@ export const FORMATTERS = {
   "count-props": countComponentsAndProps,
   aliases: aliases,
   "prop-values": propValues,
+  "prop-combinations": propCombinations,
+  "prop-value-combinations": propValueCombinations,
 };
 
 export async function loadFormatter(formatterName: string | undefined) {
