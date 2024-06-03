@@ -24,8 +24,7 @@
   "scripts": {
     "tsc": "tsc",
     "build": "parcel build --no-cache",
-    "start": "pnpm build ; node --es-module-specifier-resolution=node dist/index.js",
-    "postinstall": "npm run build"
+    "start": "pnpm build ; node --es-module-specifier-resolution=node dist/index.js"
   },
   "author": "Greg White",
   "license": "ISC",
