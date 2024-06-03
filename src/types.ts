@@ -1,5 +1,3 @@
-import { Literal, Position } from "estree-jsx";
-
 export interface Report {
   usage: {
     [key: string]: {
@@ -19,13 +17,19 @@ export interface ComponentInstance {
   location: {
     file: string;
     absolutePath: string;
-    start?: Position;
-    end?: Position;
+    start?: {
+      line: number;
+      column: number;
+    };
+    end?: {
+      line: number;
+      column: number;
+    };
   };
 
   props: {
     [key: string]: {
-      value: Literal["value"];
+      value: string | number | bigint | boolean | RegExp | null | undefined;
       location: string;
     };
   };
