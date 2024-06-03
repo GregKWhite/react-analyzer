@@ -1,7 +1,7 @@
 {
-  "name": "react-analyzer",
+  "name": "@artisanaljorts/react-analyzer",
   "version": "1.0.0",
-  "description": "",
+  "description": "A static React analyzer - easily understand your React codebase",
   "targets": {
     "index": {
       "source": "src/index.ts",
