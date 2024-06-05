@@ -34,3 +34,7 @@ export async function loadFormatter(formatterName: string | undefined) {
     }
   }
 }
+
+export function isCustomFormatter(formatterName: string | undefined) {
+  return formatterName != null && !(formatterName in FORMATTERS);
+}

@@ -3,7 +3,7 @@
 import fs from "fs";
 import { Project } from "ts-morph";
 import { Report } from "./types";
-import { loadFormatter } from "./formatters";
+import { loadFormatter, isCustomFormatter } from "./formatters";
 import { OptionTypes, parseArguments, USAGE_DOCS } from "./options";
 import { crawlDirectory } from "./crawl-directory";
 import { crawlFile } from "./crawl-file";
@@ -59,7 +59,13 @@ async function run(options: OptionTypes): Promise<void> {
     report = filterMatches(report, options.match);
   }
 
-  const reportContents = JSON.stringify(processorFn(report), null, 2);
+  // If the user provided their own formatter, respect the output - otherwise,
+  // format it as JSON.
+  let unformattedReport = processorFn(report);
+  let reportContents: any = unformattedReport;
+  if (!isCustomFormatter(options.formatter)) {
+    reportContents = JSON.stringify(unformattedReport, null, 2);
+  }
 
   const elapsedTime =
     Number(((process.hrtime.bigint() - startTime) * 10n) / BigInt(1e9)) / 10;
