@@ -42,9 +42,6 @@ function analyzeAst(
       element
     );
 
-    // Ignore built-in elements
-    if (instance.builtin) return;
-
     results.push(instance);
   });
 
@@ -73,7 +70,7 @@ function isBuiltIn(name: string) {
 
 function getBuiltinName(name: string) {
   if (isBuiltIn(name)) {
-    return { name, path: name, alias: undefined };
+    return { name, path: "react", alias: undefined };
   }
 }
 
