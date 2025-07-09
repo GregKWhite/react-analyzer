@@ -1,6 +1,6 @@
 {
   "name": "@artisanaljorts/react-analyzer",
-  "version": "1.0.5",
+  "version": "1.0.6",
   "description": "A static React analyzer - easily understand your React codebase",
   "targets": {
     "index": {
