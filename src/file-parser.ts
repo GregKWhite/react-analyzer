@@ -102,7 +102,6 @@ function getImportPath(ast: SgNode, name: string) {
                 kind: "identifier",
                 pattern: "$ALIAS",
                 field: "alias",
-                regex: matchingRegex,
               },
             },
           },
