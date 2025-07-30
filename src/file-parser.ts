@@ -210,17 +210,23 @@ function analyzeComponent(
       rule: { any: [{ kind: "string_fragment" }, { kind: "jsx_expression" }] },
     });
 
-    if (identifier && value) {
+    if (identifier) {
       const range = attr.range();
-      let formattedValue = value.text();
+      let formattedValue;
 
-      if (value.kind() === "jsx_expression") {
-        formattedValue = formattedValue.slice(1, -1);
-      }
+      if (value != null) {
+        formattedValue = value.text();
 
-      // Ensure string values are wrapped in qzuotes
-      if (value.kind() === "string_fragment") {
-        formattedValue = `'${formattedValue}'`;
+        if (value.kind() === "jsx_expression") {
+          formattedValue = formattedValue.slice(1, -1);
+        }
+
+        // Ensure string values are wrapped in qzuotes
+        if (value.kind() === "string_fragment") {
+          formattedValue = `'${formattedValue}'`;
+        }
+      } else {
+        formattedValue = "true";
       }
 
       instance.props[identifier.text()] = {
